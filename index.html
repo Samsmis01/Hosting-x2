@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XENOBAN — Couplage Bot Sécurisé</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 520px;
+      width: 100%;
+      background: #1a1f3a;
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    h1 {
+      color: #4ade80;
+      font-size: 1.8em;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .subtitle {
+      text-align: center;
+      color: #94a3b8;
+      margin-bottom: 24px;
+      font-size: 0.9em;
+    }
+    .warning {
+      background: rgba(239, 68, 68, 0.1);
+      border-left: 4px solid #ef4444;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      font-size: 0.85em;
+      color: #fca5a5;
+      line-height: 1.5;
+    }
+    label { display: block; font-size: 0.9em; color: #94a3b8; margin-bottom: 8px; margin-top: 16px; }
+    input[type="tel"] {
+      width: 100%;
+      padding: 14px;
+      background: #0a0e27;
+      border: 2px solid #2a3050;
+      border-radius: 10px;
+      color: #e0e0e0;
+      font-size: 1em;
+      transition: 0.3s;
+    }
+    input[type="tel"]:focus { outline: none; border-color: #4ade80; }
+    .checkbox-group {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 20px;
+      padding: 14px;
+      background: rgba(251, 191, 36, 0.05);
+      border-radius: 10px;
+      border: 1px solid rgba(251, 191, 36, 0.2);
+    }
+    .checkbox-group input[type="checkbox"] {
+      margin-top: 3px;
+      cursor: pointer;
+      width: 18px;
+      height: 18px;
+      accent-color: #4ade80;
+    }
+    .checkbox-group label { margin: 0; color: #fbbf24; font-size: 0.85em; cursor: pointer; line-height: 1.5; }
+    button {
+      width: 100%;
+      padding: 16px;
+      background: #4ade80;
+      color: #0a0e27;
+      border: none;
+      border-radius: 10px;
+      font-size: 1em;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: 0.3s;
+    }
+    button:hover:not(:disabled) { background: #22c55e; transform: translateY(-2px); }
+    button:disabled { background: #4a5568; cursor: not-allowed; }
+    .result {
+      margin-top: 24px;
+      padding: 20px;
+      background: #0a0e27;
+      border-radius: 10px;
+      display: none;
+    }
+    .result.show { display: block; }
+    .result h3 { color: #4ade80; margin-bottom: 12px; font-size: 1em; }
+    .code-box {
+      background: #1a1f3a;
+      padding: 16px;
+      border-radius: 8px;
+      text-align: center;
+      font-family: 'Courier New', monospace;
+      font-size: 1.8em;
+      letter-spacing: 4px;
+      color: #4ade80;
+      margin: 12px 0;
+      border: 2px solid #4ade80;
+      word-break: break-all;
+    }
+    .instructions { font-size: 0.85em; color: #94a3b8; line-height: 1.6; }
+    .instructions ol { padding-left: 20px; margin-top: 8px; }
+    .instructions li { margin: 4px 0; }
+    .error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid #ef4444;
+      padding: 12px;
+      border-radius: 8px;
+      color: #fca5a5;
+      margin-top: 16px;
+      display: none;
+      font-size: 0.9em;
+    }
+    .error.show { display: block; }
+    .info-box {
+      background: rgba(74, 222, 128, 0.05);
+      border: 1px solid rgba(74, 222, 128, 0.2);
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 16px;
+      font-size: 0.85em;
+      color: #86efac;
+    }
+    .footer { text-align: center; margin-top: 24px; font-size: 0.75em; color: #4a5568; }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75em;
+      font-weight: bold;
+    }
+    .status-pending { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
+    .status-ready { background: rgba(74, 222, 128, 0.2); color: #4ade80; }
+    .status-error { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+    .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+    .actions button {
+      flex: 1;
+      min-width: 140px;
+      padding: 12px;
+      font-size: 0.9em;
+      margin-top: 0;
+    }
+    .btn-danger { background: #ef4444 !important; color: white !important; }
+    .btn-danger:hover:not(:disabled) { background: #dc2626 !important; }
+    .btn-secondary { background: #2a3050 !important; color: #e0e0e0 !important; }
+    .btn-secondary:hover:not(:disabled) { background: #3a4060 !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤖 XENOBAN</h1>
+    <p class="subtitle">Couplage sécurisé de votre bot personnel</p>
+    
+    <div class="warning">
+      ⚠️ <strong>Avertissement important :</strong>
+      <br>Ce service utilise une bibliothèque non-officielle WhatsApp. Votre numéro peut être temporairement ou définitivement banni par WhatsApp. <strong>Utilisez un numéro secondaire</strong>, jamais votre numéro principal.
+    </div>
+    
+    <label for="phone">📱 Votre numéro WhatsApp</label>
+    <input type="tel" id="phone" placeholder="243XXXXXXXXX" maxlength="15" pattern="[0-9]+" autocomplete="off">
+    <p style="font-size: 0.75em; color: #6b7280; margin-top: 4px;">
+      Format international sans le "+" (ex: 243983205767)
+    </p>
+    
+    <div class="checkbox-group">
+      <input type="checkbox" id="consent">
+      <label for="consent">
+        Je consens à coupler mon numéro WhatsApp avec XENOBAN. Je comprends que :
+        <br>• Mon numéro peut être banni par WhatsApp
+        <br>• Mes messages ne sont jamais stockés
+        <br>• Je peux me déconnecter à tout moment depuis ce site
+      </label>
+    </div>
+    
+    <button id="pairBtn" disabled>🔗 Générer mon code de couplage</button>
+    
+    <div class="error" id="error"></div>
+    <div class="info-box" id="info" style="display:none;"></div>
+    
+    <div class="result" id="result">
+      <h3>✅ Code de couplage généré</h3>
+      <div class="code-box" id="codeBox">---</div>
+      
+      <div class="instructions">
+        <strong>📖 Étapes :</strong>
+        <ol>
+          <li>Ouvre WhatsApp sur ce téléphone</li>
+          <li>Va dans <strong>Paramètres → Appareils liés</strong></li>
+          <li>Clique sur <strong>Lier un appareil</strong></li>
+          <li>Choisis <strong>Lier avec un numéro de téléphone</strong></li>
+          <li>Entre le code ci-dessus</li>
+          <li>Attends la connexion (30 secondes max)</li>
+        </ol>
+      </div>
+      
+      <div class="actions">
+        <button class="btn-secondary" onclick="checkStatus()">🔄 Vérifier statut</button>
+        <button class="btn-danger" onclick="disconnect()">🚪 Déconnecter</button>
+      </div>
+    </div>
+    
+    <div class="footer">
+      XENOBAN V3 • Service privé • 10 utilisateurs maximum
+    </div>
+  </div>
+
+  <script>
+    // ⚠️ ADRESSE DU SERVEUR RENDER (à remplacer par la vraie URL)
+    const API_URL = 'https://pair-api-xenoban.onrender.com';
+    
+    let currentPhone = null;
+    let currentCode = null;
+    const phoneInput = document.getElementById('phone');
+    const consentCheck = document.getElementById('consent');
+    const pairBtn = document.getElementById('pairBtn');
+    const resultDiv = document.getElementById('result');
+    const codeBox = document.getElementById('codeBox');
+    const errorDiv = document.getElementById('error');
+    const infoDiv = document.getElementById('info');
+    
+    function showError(msg) {
+      errorDiv.textContent = '❌ ' + msg;
+      errorDiv.classList.add('show');
+      infoDiv.style.display = 'none';
+    }
+    
+    function showInfo(msg) {
+      infoDiv.textContent = 'ℹ️ ' + msg;
+      infoDiv.style.display = 'block';
+      errorDiv.classList.remove('show');
+    }
+    
+    function updateBtn() {
+      const phone = phoneInput.value.replace(/\D/g, '');
+      pairBtn.disabled = !(phone.length >= 9 && consentCheck.checked);
+    }
+    
+    phoneInput.addEventListener('input', updateBtn);
+    consentCheck.addEventListener('change', updateBtn);
+    
+    pairBtn.addEventListener('click', async () => {
+      const phone = phoneInput.value.replace(/\D/g, '');
+      
+      pairBtn.disabled = true;
+      pairBtn.textContent = '⏳ Génération en cours...';
+      errorDiv.classList.remove('show');
+      resultDiv.classList.remove('show');
+      
+      try {
+        const res = await fetch(`${API_URL}/api/pair`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, consent: true })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+        
+        currentPhone = phone;
+        currentCode = data.code;
+        
+        codeBox.textContent = data.code;
+        resultDiv.classList.add('show');
+        pairBtn.textContent = '✅ Code généré';
+        pairBtn.disabled = false;
+        
+        // Polling automatique du statut
+        pollStatus();
+        
+      } catch (e) {
+        showError(e.message);
+        pairBtn.textContent = '🔗 Générer mon code de couplage';
+        pairBtn.disabled = false;
+      }
+    });
+    
+    async function checkStatus() {
+      if (!currentPhone) return;
+      try {
+        const res = await fetch(`${API_URL}/api/status/${currentPhone}`);
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+        
+        if (data.status === 'connected') {
+          showInfo('✅ Votre bot est connecté et actif !');
+        } else if (data.status === 'pending') {
+          showInfo('⏳ En attente de couplage. Entrez le code dans WhatsApp.');
+        } else if (data.status === 'disconnected') {
+          showInfo('⚠️ Bot déconnecté. Générez un nouveau code.');
+        }
+      } catch (e) {
+        showError(e.message);
+      }
+    }
+    
+    async function disconnect() {
+      if (!currentPhone) return;
+      if (!confirm('Voulez-vous vraiment déconnecter votre bot ?')) return;
+      
+      try {
+        const res = await fetch(`${API_URL}/api/disconnect/${currentPhone}`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+        
+        showInfo('✅ Bot déconnecté. Vous pouvez en créer un nouveau.');
+        resultDiv.classList.remove('show');
+        currentPhone = null;
+        currentCode = null;
+        
+      } catch (e) {
+        showError(e.message);
+      }
+    }
+    
+    async function pollStatus() {
+      if (!currentPhone) return;
+      try {
+        const res = await fetch(`${API_URL}/api/status/${currentPhone}`);
+        const data = await res.json();
+        
+        if (data.status === 'connected') {
+          showInfo('✅ Votre bot est connecté et actif !');
+          return;
+        }
+      } catch (e) {}
+      
+      // Revérifier dans 10 secondes
+      setTimeout(pollStatus, 10000);
+    }
+  </script>
+</body>
+</html>
