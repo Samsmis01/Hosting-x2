@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HEXTECH — Dashboard de Couplage</title>
   <style>
+    /* ⚡ RESET & BASE */
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     
     body {
@@ -16,6 +17,7 @@
       justify-content: center;
     }
 
+    /* 📦 LAYOUT PRINCIPAL */
     .dashboard {
       width: 100%;
       max-width: 1200px;
@@ -24,6 +26,7 @@
       gap: 20px;
     }
 
+    /* 🟢 HEADER (Salutation) */
     .header {
       display: flex;
       justify-content: space-between;
@@ -45,7 +48,11 @@
       margin-top: 4px;
     }
 
-    .stats-container { display: flex; gap: 12px; }
+    /* 🔵 STATS CARDS (Top right) */
+    .stats-container {
+      display: flex;
+      gap: 12px;
+    }
     .stat-card {
       background: #0f131a;
       border: 1px solid #1e2532;
@@ -60,12 +67,14 @@
     .stat-value { font-size: 1.1rem; font-weight: bold; color: #ffffff; }
     .stat-label { font-size: 0.65rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
 
+    /* 🎛️ GRILLE DES SERVEURS */
     .servers-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 15px;
     }
 
+    /* 🗂️ CARTE SERVEUR */
     .server-card {
       background: #0f131a;
       border: 1px solid #1e2532;
@@ -76,11 +85,20 @@
       gap: 15px;
       transition: all 0.3s ease;
     }
-    .server-card.full { border-color: #ff006e; box-shadow: 0 0 15px rgba(255, 0, 110, 0.1); }
-    .server-card.offline { opacity: 0.5; }
-    .server-card.selected { border-color: #00c8ff; box-shadow: 0 0 20px rgba(0, 200, 255, 0.2); }
+    .server-card.full {
+      border-color: #ff006e;
+      box-shadow: 0 0 15px rgba(255, 0, 110, 0.1);
+    }
+    .server-card.offline {
+      opacity: 0.5;
+    }
 
-    .card-header { display: flex; justify-content: space-between; align-items: center; }
+    /* En-tête de la carte */
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
     .server-title {
       display: flex;
       align-items: center;
@@ -102,6 +120,7 @@
     .icon-game { background: rgba(0, 255, 128, 0.1); color: #00ff80; }
     .icon-app { background: rgba(255, 149, 0, 0.1); color: #ff9500; }
 
+    /* Badge de statut */
     .status-badge {
       font-size: 0.7rem;
       padding: 4px 10px;
@@ -116,7 +135,12 @@
     .status-badge.offline { background: rgba(100, 116, 139, 0.1); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.2); }
     .status-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
-    .card-body { display: flex; flex-direction: column; gap: 12px; }
+    /* Corps de la carte (Barres) */
+    .card-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
     .metric-row { display: flex; justify-content: space-between; font-size: 0.75rem; color: #64748b; margin-bottom: 4px; }
     .metric-row span:last-child { color: #e2e8f0; font-weight: 500; }
     .progress-bar { width: 100%; height: 4px; background: #1e2532; border-radius: 4px; overflow: hidden; }
@@ -126,6 +150,7 @@
     .fill-purple { background: #7b2ff7; }
     .fill-orange { background: #ff9500; }
 
+    /* Pied de carte (Bouton et date) */
     .card-footer {
       display: flex;
       justify-content: space-between;
@@ -137,6 +162,7 @@
     .uptime { font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 5px; }
     .uptime::before { content: '🕒'; font-size: 0.8rem; }
 
+    /* 🔘 BOUTON DE SÉLECTION */
     .btn-select {
       background: #1e2532;
       color: #e2e8f0;
@@ -167,6 +193,7 @@
       border-color: #2d3748;
     }
 
+    /* 📊 SECTION GRAPHIQUE & ACTIVITÉ */
     .bottom-section {
       display: grid;
       grid-template-columns: 2fr 1fr;
@@ -190,12 +217,11 @@
       align-items: center;
     }
     .panel-legend { display: flex; gap: 10px; font-size: 0.7rem; }
-    .legend-item { display: flex; align-items: center; gap: 4px; color: #64748b; }
+    .legend-item { display: flex; align-items: center; gap: 4px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; }
-    .dot-blue { background: #00c8ff; } 
-    .dot-purple { background: #7b2ff7; } 
-    .dot-orange { background: #ff9500; }
+    .dot-blue { background: #00c8ff; } .dot-purple { background: #7b2ff7; } .dot-orange { background: #ff9500; }
 
+    /* Graphique simplifié (CSS) */
     .chart-container {
       height: 120px;
       display: flex;
@@ -213,6 +239,7 @@
     .activity-text { color: #94a3b8; flex: 1; }
     .activity-time { color: #64748b; font-size: 0.7rem; }
 
+    /* 📝 FORMULAIRE DE COUPLAGE */
     .form-panel {
       background: #0f131a;
       border: 1px solid #1e2532;
@@ -246,27 +273,27 @@
     .btn-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0, 200, 255, 0.3); }
     .btn-submit:disabled { background: #1e2532; color: #4a5568; cursor: not-allowed; }
 
+    /* Résultats */
     .result-box { display: none; padding: 20px; background: rgba(0, 200, 255, 0.05); border: 1px solid #00c8ff; border-radius: 8px; margin-top: 10px; text-align: center; }
     .result-box.show { display: block; }
     .code-display { font-size: 2.5rem; font-weight: bold; color: #00e5ff; letter-spacing: 8px; margin: 15px 0; font-family: monospace; }
     
-    .error-msg { display: none; color: #ff006e; font-size: 0.85rem; padding: 10px; background: rgba(255, 0, 110, 0.1); border-radius: 6px; border: 1px solid #ff006e; margin-top: 5px; }
+    .error-msg { display: none; color: #ff006e; font-size: 0.85rem; padding: 10px; background: rgba(255, 0, 110, 0.1); border-radius: 6px; border: 1px solid #ff006e; }
     .error-msg.show { display: block; }
-    .info-msg { display: none; color: #00c8ff; font-size: 0.85rem; padding: 10px; background: rgba(0, 200, 255, 0.1); border-radius: 6px; border: 1px solid #00c8ff; margin-top: 5px; }
+    .info-msg { display: none; color: #00c8ff; font-size: 0.85rem; padding: 10px; background: rgba(0, 200, 255, 0.1); border-radius: 6px; border: 1px solid #00c8ff; }
     .info-msg.show { display: block; }
 
     .action-buttons { display: flex; gap: 10px; margin-top: 15px; }
     .action-buttons button { flex: 1; padding: 10px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; }
     .btn-check { background: #1e2532; color: #e2e8f0; }
-    .btn-check:hover { background: #2d3748; }
     .btn-disconnect { background: #ff006e; color: #fff; }
-    .btn-disconnect:hover { background: #dc2626; }
   </style>
 </head>
 <body>
 
   <div class="dashboard">
     
+    <!-- HEADER -->
     <header class="header">
       <div>
         <h1>HEXTECH <span>👋</span></h1>
@@ -276,24 +303,26 @@
         <div class="stat-card">
           <div class="stat-icon" style="color:#00c8ff">🖥️</div>
           <div class="stat-info">
-            <span class="stat-value" id="activeServers">-</span>
+            <span class="stat-value" id="activeServers">0</span>
             <span class="stat-label">Serveurs actifs</span>
           </div>
         </div>
         <div class="stat-card">
           <div class="stat-icon" style="color:#00ff80">👥</div>
           <div class="stat-info">
-            <span class="stat-value" id="totalUsers">-</span>
+            <span class="stat-value" id="totalUsers">0</span>
             <span class="stat-label">Utilisateurs liés</span>
           </div>
         </div>
       </div>
     </header>
 
+    <!-- GRILLE DES 4 SERVEURS -->
     <section class="servers-grid" id="serversGrid">
-      <!-- Cartes injectées dynamiquement -->
+      <!-- Les cartes seront injectées par Javascript -->
     </section>
 
+    <!-- SECTION DU BAS (GRAPHIQUE + ACTIVITÉ) -->
     <section class="bottom-section">
       <div class="panel">
         <div class="panel-title">
@@ -301,20 +330,27 @@
           <div class="panel-legend">
             <span class="legend-item"><span class="dot dot-blue"></span> CPU</span>
             <span class="legend-item"><span class="dot dot-purple"></span> RAM</span>
+            <span class="legend-item"><span class="dot dot-orange"></span> Disque</span>
           </div>
         </div>
-        <div class="chart-container" id="chartContainer"></div>
+        <div class="chart-container" id="chartContainer">
+          <!-- Barres générées par JS -->
+        </div>
       </div>
       <div class="panel">
         <div class="panel-title">Activité récente</div>
         <div class="activity-list" id="activityList">
-          <div class="activity-item"><div class="activity-dot"></div><span class="activity-text">En attente...</span><span class="activity-time">-</span></div>
+          <div class="activity-item"><div class="activity-dot"></div><span class="activity-text">Serveur 1 - Web</span><span class="activity-time">Il y a 2 min</span></div>
+          <div class="activity-item"><div class="activity-dot"></div><span class="activity-text">Serveur 2 - DB</span><span class="activity-time">Il y a 5 min</span></div>
+          <div class="activity-item"><div class="activity-dot"></div><span class="activity-text">Serveur 3 - Jeux</span><span class="activity-time">Il y a 12 min</span></div>
+          <div class="activity-item"><div class="activity-dot" style="background:#64748b"></div><span class="activity-text">Serveur 4 - App</span><span class="activity-time">Il y a 1 h</span></div>
         </div>
       </div>
     </section>
 
+    <!-- FORMULAIRE DE COUPLAGE (Apparaît quand un serveur est sélectionné) -->
     <section class="form-panel" id="formPanel" style="display: none;">
-      <h2>🔗 Couplage sur le <span id="selectedServerName">-</span></h2>
+      <h2>🔗 Couplage sur le <span id="selectedServerName">Serveur 1</span></h2>
       <p>Entrez votre numéro WhatsApp pour recevoir le code de couplage.</p>
       
       <input type="tel" id="phone" placeholder="243XXXXXXXXX" maxlength="15" pattern="[0-9]+">
@@ -345,12 +381,15 @@
   </div>
 
   <script>
-    // ⚠️ URL DE TON SERVEUR RENDER
-    const API_URL = 'https://last-judment.onrender.com';
+    // ⚠️ URL DE TON SERVEUR MAÎTRE (Render)
+    // Si ton index.html est sur le même serveur que server.js, tu peux laisser vide.
+    // Sinon, mets l'URL complète (ex: 'https://last-judment.onrender.com')
+    const API_URL = ''; 
 
     let currentPhone = null;
+    let currentCode = null;
     let selectedServerId = null;
-    let serversCache = [];
+    let currentServers = [];
 
     const serversGrid = document.getElementById('serversGrid');
     const formPanel = document.getElementById('formPanel');
@@ -363,66 +402,51 @@
     const resultBox = document.getElementById('resultBox');
     const codeDisplay = document.getElementById('codeDisplay');
 
-    // ==================== CHARGEMENT RÉEL DES SERVEURS ====================
+    // 🚀 CHARGEMENT DES SERVEURS EN TEMPS RÉEL
     async function loadServers() {
       try {
         const res = await fetch(`${API_URL}/api/servers`);
         const data = await res.json();
+        currentServers = data.servers;
         
-        if (!res.ok) throw new Error(data.error || 'Erreur chargement serveurs');
-        
-        serversCache = data.servers;
-        renderServers(data.servers);
-        
-        // Stats globales
-        document.getElementById('activeServers').textContent = data.servers.filter(s => s.online).length;
-        document.getElementById('totalUsers').textContent = data.servers.reduce((sum, s) => sum + s.current, 0);
-        
-        // Graphique réel
-        renderChart(data.servers);
-        
-        // Activité
-        renderActivity(data.servers);
-        
+        renderServers(currentServers);
       } catch (e) {
-        console.error('Erreur:', e.message);
-        serversGrid.innerHTML = `<div class="server-card"><div class="card-header"><div class="server-title">❌ Impossible de charger les serveurs</div></div><div class="card-body"><p style="color:#64748b;font-size:0.85rem;">${e.message}</p></div></div>`;
+        console.error("Erreur chargement serveurs:", e);
+        serversGrid.innerHTML = '<p style="color: #ff006e; text-align: center; grid-column: 1/-1;">Impossible de contacter le serveur maître. Vérifiez que Render est réveillé.</p>';
       }
     }
 
-    // ==================== RENDU DES CARTES SERVEUR ====================
+    // 🎨 AFFICHAGE DES CARTES
     function renderServers(servers) {
       serversGrid.innerHTML = '';
+      let totalUsers = 0;
+      let activeCount = 0;
 
       servers.forEach(srv => {
+        totalUsers += srv.current;
+        if (srv.online) activeCount++;
+
         const isFull = srv.current >= srv.max;
         const isOffline = !srv.online;
-        
+
         let cardClass = '';
         let badgeClass = '';
         let badgeText = '';
-        
+
         if (isOffline) { cardClass = 'offline'; badgeClass = 'offline'; badgeText = 'Hors ligne'; }
         else if (isFull) { cardClass = 'full'; badgeClass = 'full'; badgeText = 'Complet'; }
         else { badgeClass = 'online'; badgeText = 'En ligne'; }
 
         const usagePercent = (srv.current / srv.max) * 100;
-        const cpuPercent = srv.cpu || 0;
-        const ramPercent = srv.ram || 0;
         
-        // Icône selon l'ID
-        let icon = '🌐';
-        let iconClass = 'icon-web';
-        if (srv.id === 2) { icon = '🗄️'; iconClass = 'icon-db'; }
-        else if (srv.id === 3) { icon = '🎮'; iconClass = 'icon-game'; }
-        else if (srv.id === 4) { icon = '📱'; iconClass = 'icon-app'; }
+        // Icônes basées sur l'ID
+        const icons = ['🌐', '🗄️', '🎮', '📱'];
+        const iconClasses = ['icon-web', 'icon-db', 'icon-game', 'icon-app'];
+        const icon = icons[srv.id - 1] || '🖥️';
+        const iconClass = iconClasses[srv.id - 1] || 'icon-web';
 
         const card = document.createElement('div');
         card.className = `server-card ${cardClass}`;
-        card.dataset.serverId = srv.id;
-        
-        if (selectedServerId === srv.id) card.classList.add('selected');
-        
         card.innerHTML = `
           <div class="card-header">
             <div class="server-title">
@@ -438,111 +462,68 @@
               <div class="progress-bar"><div class="progress-fill fill-blue" style="width: ${usagePercent}%"></div></div>
             </div>
             <div>
-              <div class="metric-row"><span>CPU</span><span>${cpuPercent}%</span></div>
-              <div class="progress-bar"><div class="progress-fill fill-green" style="width: ${cpuPercent}%"></div></div>
+              <div class="metric-row"><span>CPU</span><span>${srv.cpu || 0}%</span></div>
+              <div class="progress-bar"><div class="progress-fill fill-green" style="width: ${srv.cpu || 0}%"></div></div>
             </div>
             <div>
-              <div class="metric-row"><span>RAM</span><span>${ramPercent}%</span></div>
-              <div class="progress-bar"><div class="progress-fill fill-purple" style="width: ${ramPercent}%"></div></div>
+              <div class="metric-row"><span>RAM</span><span>${srv.ram || 0}%</span></div>
+              <div class="progress-bar"><div class="progress-fill fill-purple" style="width: ${srv.ram || 0}%"></div></div>
             </div>
           </div>
 
           <div class="card-footer">
-            <div class="uptime">${srv.uptime || 'Actif'}</div>
-            <button class="btn-select" ${isOffline || isFull ? 'disabled' : ''} data-server-id="${srv.id}" data-server-name="${srv.name}">
+            <div class="uptime">Actif</div>
+            <button class="btn-select" ${isOffline || isFull ? 'disabled' : ''} onclick="selectServer(${srv.id}, '${srv.name}')">
               ${isOffline || isFull ? 'Indisponible' : 'Sélectionner'}
             </button>
           </div>
         `;
         serversGrid.appendChild(card);
       });
+
+      document.getElementById('totalUsers').textContent = totalUsers;
+      document.getElementById('activeServers').textContent = activeCount;
       
-      // Attacher les événements de sélection
-      document.querySelectorAll('.btn-select').forEach(btn => {
-        if (!btn.disabled) {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            selectServer(parseInt(btn.dataset.serverId), btn.dataset.serverName);
-          });
-        }
-      });
+      renderChart();
     }
 
-    // ==================== GRAPHIQUE RÉEL ====================
-    function renderChart(servers) {
+    // 📊 GRAPHIQUE DYNAMIQUE (Basé sur l'utilisation réelle des serveurs)
+    function renderChart() {
       const chart = document.getElementById('chartContainer');
       chart.innerHTML = '';
       
-      // Pour chaque serveur, afficher une barre qui représente l'utilisation
-      servers.forEach((srv, i) => {
-        const usage = (srv.current / srv.max) * 100;
+      // On génère 20 barres qui représentent l'activité globale
+      for (let i = 0; i < 20; i++) {
+        let height = 20; // Valeur par défaut
+        
+        if (currentServers.length > 0) {
+          // On prend la moyenne d'utilisation des serveurs pour simuler l'activité
+          const avgLoad = currentServers.reduce((acc, s) => acc + (s.online ? (s.cpu + s.ram)/2 : 0), 0) / currentServers.length;
+          // On ajoute une petite variation aléatoire pour l'effet visuel
+          height = Math.max(10, Math.min(100, avgLoad + (Math.random() * 20 - 10)));
+        }
+        
         const bar = document.createElement('div');
         bar.className = 'chart-bar';
-        bar.style.height = `${Math.max(usage, 10)}%`;
-        bar.style.opacity = 0.4 + (usage / 200);
-        bar.title = `${srv.name}: ${srv.current}/${srv.max} utilisateurs`;
-        chart.appendChild(bar);
-      });
-      
-      // Compléter avec quelques barres pour l'esthétique
-      for (let i = servers.length; i < 20; i++) {
-        const bar = document.createElement('div');
-        bar.className = 'chart-bar';
-        bar.style.height = '5%';
-        bar.style.opacity = 0.15;
+        bar.style.height = `${height}%`;
+        bar.style.opacity = 0.3 + (height / 100);
         chart.appendChild(bar);
       }
     }
 
-    // ==================== ACTIVITÉ RÉELLE ====================
-    function renderActivity(servers) {
-      const list = document.getElementById('activityList');
-      list.innerHTML = '';
-      
-      servers.forEach(srv => {
-        const item = document.createElement('div');
-        item.className = 'activity-item';
-        
-        const dotColor = !srv.online ? '#64748b' : (srv.current >= srv.max ? '#ff006e' : '#00ff80');
-        const statusText = !srv.online ? 'Hors ligne' : (srv.current >= srv.max ? 'Complet' : `${srv.current}/${srv.max} utilisateurs`);
-        
-        item.innerHTML = `
-          <div class="activity-dot" style="background:${dotColor}"></div>
-          <span class="activity-text">${srv.name}</span>
-          <span class="activity-time">${statusText}</span>
-        `;
-        list.appendChild(item);
-      });
-    }
-
-    // ==================== SÉLECTION SERVEUR ====================
+    // 🖱️ SÉLECTIONNER UN SERVEUR
     function selectServer(id, name) {
       selectedServerId = id;
       selectedServerName.textContent = name;
       
-      // Mettre à jour l'apparence
-      document.querySelectorAll('.server-card').forEach(card => {
-        card.classList.remove('selected');
-        if (parseInt(card.dataset.serverId) === id) {
-          card.classList.add('selected');
-        }
-      });
-      
-      document.querySelectorAll('.btn-select').forEach(btn => {
-        btn.classList.remove('selected');
-        if (parseInt(btn.dataset.serverId) === id) {
-          btn.classList.add('selected');
-          btn.textContent = 'Sélectionné';
-        } else if (!btn.disabled) {
-          btn.textContent = 'Sélectionner';
-        }
-      });
-      
-      // Afficher le formulaire
       formPanel.style.display = 'flex';
       formPanel.scrollIntoView({ behavior: 'smooth' });
       
-      // Réinitialiser le formulaire
+      document.querySelectorAll('.btn-select').forEach(btn => btn.classList.remove('selected'));
+      const buttons = document.querySelectorAll('.btn-select');
+      if (buttons[id - 1]) buttons[id - 1].classList.add('selected');
+
+      // Reset du formulaire
       resultBox.classList.remove('show');
       errorMsg.classList.remove('show');
       infoMsg.classList.remove('show');
@@ -551,15 +532,15 @@
       updateBtn();
     }
 
-    // ==================== VALIDATION FORMULAIRE ====================
+    // 📝 VALIDATION DU FORMULAIRE
     function updateBtn() {
       const phone = phoneInput.value.replace(/\D/g, '');
-      pairBtn.disabled = !(phone.length >= 9 && consentCheck.checked && selectedServerId !== null);
+      pairBtn.disabled = !(phone.length >= 9 && consentCheck.checked);
     }
     phoneInput.addEventListener('input', updateBtn);
     consentCheck.addEventListener('change', updateBtn);
 
-    // ==================== GÉNÉRATION DU CODE (RÉEL) ====================
+    // 🚀 GÉNÉRATION DU CODE (Envoi au server.js avec l'ID du serveur)
     pairBtn.addEventListener('click', async () => {
       const phone = phoneInput.value.replace(/\D/g, '');
       if (!selectedServerId) return showError('Veuillez sélectionner un serveur.');
@@ -573,17 +554,15 @@
         const res = await fetch(`${API_URL}/api/pair`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            phone, 
-            consent: true, 
-            serverId: selectedServerId 
-          })
+          body: JSON.stringify({ phone, consent: true, serverId: selectedServerId })
         });
 
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur serveur');
 
         currentPhone = phone;
+        currentCode = data.code;
+        
         codeDisplay.textContent = data.code;
         resultBox.classList.add('show');
         pairBtn.textContent = '✅ Code généré';
@@ -591,20 +570,20 @@
         
         showInfo(`Code généré sur le serveur ${selectedServerId}. Entrez-le dans WhatsApp.`);
         
-        // Rafraîchir les serveurs (un slot a été pris)
+        // Rafraîchir l'état des serveurs après 2 secondes (pour voir le nouveau user)
         setTimeout(loadServers, 2000);
         
-        // Polling
+        // Lancer la surveillance du statut
         pollStatus();
 
       } catch (e) {
         showError(e.message);
-        pairBtn.textContent = 'Générer le code de couplage';
+        pairBtn.textContent = '🔗 Générer le code de couplage';
         pairBtn.disabled = false;
       }
     });
 
-    // ==================== VÉRIFIER STATUT ====================
+    // 🔄 VÉRIFIER LE STATUT
     async function checkStatus() {
       if (!currentPhone) return;
       try {
@@ -618,7 +597,7 @@
       } catch (e) { showError(e.message); }
     }
 
-    // ==================== DÉCONNEXION ====================
+    // 🚪 DÉCONNEXION
     async function disconnect() {
       if (!currentPhone) return;
       if (!confirm('Voulez-vous vraiment déconnecter votre bot ?')) return;
@@ -628,45 +607,37 @@
         if (!res.ok) throw new Error(data.error || 'Erreur');
         showInfo('✅ Bot déconnecté.');
         resultBox.classList.remove('show');
-        currentPhone = null;
-        
-        // Rafraîchir les serveurs
-        setTimeout(loadServers, 2000);
+        currentPhone = null; currentCode = null;
+        loadServers(); // Rafraîchir les stats
       } catch (e) { showError(e.message); }
     }
 
-    // ==================== POLLING ====================
+    // ⏳ POLLING AUTOMATIQUE DU STATUT
     async function pollStatus() {
       if (!currentPhone) return;
       try {
         const res = await fetch(`${API_URL}/api/status/${currentPhone}`);
         const data = await res.json();
-        if (data.status === 'connected') {
-          showInfo('✅ Votre bot est connecté et actif !');
-          loadServers();
-          return;
+        if (data.status === 'connected') { 
+          showInfo('✅ Votre bot est connecté et actif !'); 
+          loadServers(); // Rafraîchir les stats
+          return; 
         }
       } catch (e) {}
       setTimeout(pollStatus, 10000);
     }
 
-    // ==================== UTILITAIRES ====================
-    function showError(msg) { 
-      errorMsg.textContent = '❌ ' + msg; 
-      errorMsg.classList.add('show'); 
-      infoMsg.classList.remove('show'); 
-    }
-    function showInfo(msg) { 
-      infoMsg.textContent = 'ℹ️ ' + msg; 
-      infoMsg.classList.add('show'); 
-      errorMsg.classList.remove('show'); 
-    }
+    // Utilitaires d'affichage
+    function showError(msg) { errorMsg.textContent = '❌ ' + msg; errorMsg.classList.add('show'); infoMsg.classList.remove('show'); }
+    function showInfo(msg) { infoMsg.textContent = 'ℹ️ ' + msg; infoMsg.classList.add('show'); errorMsg.classList.remove('show'); }
 
-    // ==================== LANCEMENT ====================
+    // ==================== DÉMARRAGE ====================
+    // 1. Chargement initial
     loadServers();
     
-    // Rafraîchir l'état des serveurs toutes les 15 secondes
-    setInterval(loadServers, 15000);
+    // 2. Rafraîchissement automatique toutes les 5 secondes pour le temps réel
+    setInterval(loadServers, 5000);
+
   </script>
 </body>
 </html>
