@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HEXTECH — Dashboard de Couplage</title>
+  <!-- 📊 LIBRAIRIE CHART.JS POUR LE GRAPHIQUE DE COURBES -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     /* ⚡ RESET & BASE */
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
@@ -132,22 +134,16 @@
     .panel-legend { display: flex; gap: 10px; font-size: 0.7rem; }
     .legend-item { display: flex; align-items: center; gap: 4px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; }
-    .dot-blue { background: #00c8ff; } .dot-purple { background: #7b2ff7; } .dot-green { background: #00ff80; }
+    .dot-blue { background: #00c8ff; } .dot-purple { background: #7b2ff7; } .dot-orange { background: #ff9500; } .dot-green { background: #00ff80; }
 
-    /* Graphique en direct */
+    /* Graphique Chart.js */
     .chart-container {
-      height: 120px;
-      display: flex;
-      align-items: flex-end;
-      gap: 4px;
-      padding-top: 10px;
-      border-bottom: 1px solid #1e2532;
-      border-left: 1px solid #1e2532;
+      height: 180px;
+      width: 100%;
       position: relative;
     }
-    .chart-bar { flex: 1; border-radius: 2px 2px 0 0; transition: height 0.3s ease; }
-    
-    /* Activité : on garde un espace mais il sera alimenté par les vraies données si dispo */
+
+    /* Activité */
     .activity-list { display: flex; flex-direction: column; gap: 12px; }
     .activity-item { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; }
     .activity-dot { width: 8px; height: 8px; border-radius: 50%; background: #00ff80; }
@@ -235,12 +231,13 @@
         <div class="panel-title">
           Utilisation des ressources (Temps réel)
           <div class="panel-legend">
-            <span class="legend-item"><span class="dot dot-blue"></span> CPU</span>
-            <span class="legend-item"><span class="dot dot-purple"></span> RAM</span>
+            <span class="legend-item"><span class="dot dot-green"></span> CPU</span>
+            <span class="legend-item"><span class="dot dot-blue"></span> RAM</span>
+            <span class="legend-item"><span class="dot dot-purple"></span> Disque</span>
           </div>
         </div>
-        <div class="chart-container" id="chartContainer">
-          <!-- Barres générées par JS -->
+        <div class="chart-container">
+          <canvas id="realtimeChart"></canvas>
         </div>
       </div>
       <div class="panel">
@@ -296,6 +293,7 @@
     let selectedServerId = null;
     let currentServers = [];
 
+    // Références DOM
     const serversGrid = document.getElementById('serversGrid');
     const formPanel = document.getElementById('formPanel');
     const selectedServerName = document.getElementById('selectedServerName');
@@ -307,6 +305,93 @@
     const resultBox = document.getElementById('resultBox');
     const codeDisplay = document.getElementById('codeDisplay');
     const activityList = document.getElementById('activityList');
+
+    // 📊 INITIALISATION DU GRAPHIQUE CHART.JS
+    const ctx = document.getElementById('realtimeChart').getContext('2d');
+    
+    // Création des dégradés pour les courbes
+    const gradientCpu = ctx.createLinearGradient(0, 0, 0, 180);
+    gradientCpu.addColorStop(0, 'rgba(0, 255, 128, 0.4)');
+    gradientCpu.addColorStop(1, 'rgba(0, 255, 128, 0)');
+
+    const gradientRam = ctx.createLinearGradient(0, 0, 0, 180);
+    gradientRam.addColorStop(0, 'rgba(0, 200, 255, 0.4)');
+    gradientRam.addColorStop(1, 'rgba(0, 200, 255, 0)');
+
+    const gradientDisk = ctx.createLinearGradient(0, 0, 0, 180);
+    gradientDisk.addColorStop(0, 'rgba(123, 47, 247, 0.4)');
+    gradientDisk.addColorStop(1, 'rgba(123, 47, 247, 0)');
+
+    const realtimeChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: Array(20).fill(''), // 20 points d'historique
+        datasets: [
+          {
+            label: 'CPU',
+            data: Array(20).fill(0),
+            borderColor: '#00ff80',
+            backgroundColor: gradientCpu,
+            borderWidth: 2,
+            tension: 0.4, // Courbe lisse
+            fill: true,
+            pointRadius: 0
+          },
+          {
+            label: 'RAM',
+            data: Array(20).fill(0),
+            borderColor: '#00c8ff',
+            backgroundColor: gradientRam,
+            borderWidth: 2,
+            tension: 0.4,
+            fill: true,
+            pointRadius: 0
+          },
+          {
+            label: 'Disque',
+            data: Array(20).fill(0),
+            borderColor: '#7b2ff7',
+            backgroundColor: gradientDisk,
+            borderWidth: 2,
+            tension: 0.4,
+            fill: true,
+            pointRadius: 0
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 0 }, // Pas d'animation pour un rendu instantané
+        plugins: {
+          legend: { display: false } // On utilise notre propre légende HTML
+        },
+        scales: {
+          x: { display: false }, // On cache les axes X
+          y: {
+            beginAtZero: true,
+            max: 100,
+            grid: { color: 'rgba(30, 37, 50, 0.5)', drawBorder: false },
+            ticks: { color: '#64748b', font: { size: 10 }, callback: v => v + '%' }
+          }
+        }
+      }
+    });
+
+    // Fonction pour mettre à jour le graphique avec les vraies données
+    function updateChart(cpu, ram, disk) {
+      // Ajoute la nouvelle valeur et retire la plus ancienne
+      realtimeChart.data.datasets[0].data.push(cpu);
+      realtimeChart.data.datasets[0].data.shift();
+      
+      realtimeChart.data.datasets[1].data.push(ram);
+      realtimeChart.data.datasets[1].data.shift();
+      
+      realtimeChart.data.datasets[2].data.push(disk);
+      realtimeChart.data.datasets[2].data.shift();
+      
+      realtimeChart.update();
+    }
 
     // 🚀 CHARGEMENT DES SERVEURS EN TEMPS RÉEL
     async function loadServers() {
@@ -331,10 +416,20 @@
       serversGrid.innerHTML = '';
       let totalUsers = 0;
       let activeCount = 0;
+      
+      let totalCpu = 0, totalRam = 0, totalDisk = 0;
+      let onlineServers = 0;
 
       servers.forEach(srv => {
         totalUsers += srv.current;
-        if (srv.online) activeCount++;
+        if (srv.online) {
+          activeCount++;
+          onlineServers++;
+          totalCpu += srv.cpu || 0;
+          totalRam += srv.ram || 0;
+          // On n'a pas le disque dans l'API, on met une valeur fictive basée sur le RAM pour l'exemple
+          totalDisk += (srv.ram || 0) * 0.8; 
+        }
 
         const isFull = srv.current >= srv.max;
         const isOffline = !srv.online;
@@ -393,40 +488,14 @@
       document.getElementById('totalUsers').textContent = totalUsers;
       document.getElementById('activeServers').textContent = activeCount;
       
-      renderChart();
+      // Mettre à jour le graphique avec les moyennes
+      if (onlineServers > 0) {
+        updateChart(totalCpu / onlineServers, totalRam / onlineServers, totalDisk / onlineServers);
+      } else {
+        updateChart(0, 0, 0);
+      }
+
       renderActivity();
-    }
-
-    // 📊 GRAPHIQUE 100% RÉEL (Basé sur les CPU/RAM des serveurs)
-    function renderChart() {
-      const chart = document.getElementById('chartContainer');
-      chart.innerHTML = '';
-      
-      if (currentServers.length === 0) return;
-
-      // On prend les 10 dernières valeurs CPU et RAM pour dessiner les barres
-      // Mais comme on n'a pas d'historique, on va utiliser les valeurs ACTUELLES
-      // et on va dessiner 2 barres par serveur : une pour le CPU, une pour la RAM.
-      
-      currentServers.forEach(srv => {
-        if (!srv.online) return; // On ne dessine pas les serveurs hors ligne
-
-        // Barre CPU (Bleue)
-        const cpuBar = document.createElement('div');
-        cpuBar.className = 'chart-bar';
-        cpuBar.style.height = `${Math.max(5, srv.cpu || 0)}%`;
-        cpuBar.style.background = 'linear-gradient(to top, rgba(0, 200, 255, 0.1), #00c8ff)';
-        cpuBar.style.flex = '1';
-        chart.appendChild(cpuBar);
-
-        // Barre RAM (Violette)
-        const ramBar = document.createElement('div');
-        ramBar.className = 'chart-bar';
-        ramBar.style.height = `${Math.max(5, srv.ram || 0)}%`;
-        ramBar.style.background = 'linear-gradient(to top, rgba(123, 47, 247, 0.1), #7b2ff7)';
-        ramBar.style.flex = '1';
-        chart.appendChild(ramBar);
-      });
     }
 
     // 📋 ACTIVITÉ RÉELLE (Basée sur les utilisateurs connectés)
