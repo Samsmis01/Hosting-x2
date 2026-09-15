@@ -23,7 +23,7 @@ const SERVERS = [
   {
     id: 1,
     name: 'Serveur 1',
-    url: 'https://last-judment.onrender.com/',
+    url: 'https://last-judment.onrender.com', // ⚠️ MODIFIÉ : Retiré le slash final
     lastPing: 0,
     online: false,
     cpu: 0,
@@ -33,7 +33,7 @@ const SERVERS = [
   {
     id: 2,
     name: 'Serveur 2',
-    url: 'https://last-judment.onrender.com/',
+    url: '', // ⚠️ MODIFIÉ : Vide pour l'instant (sera rempli quand tu auras un 2ème worker)
     lastPing: 0,
     online: false,
     cpu: 0,
@@ -43,7 +43,7 @@ const SERVERS = [
   {
     id: 3,
     name: 'Serveur 3',
-    url: 'https://last-judment.onrender.com/',
+    url: '', // ⚠️ MODIFIÉ : Vide
     lastPing: 0,
     online: false,
     cpu: 0,
@@ -53,7 +53,7 @@ const SERVERS = [
   {
     id: 4,
     name: 'Serveur 4',
-    url: 'https://last-judment.onrender.com/',
+    url: '', // ⚠️ MODIFIÉ : Vide
     lastPing: 0,
     online: false,
     cpu: 0,
@@ -484,11 +484,19 @@ app.post('/api/worker/:serverId/stats', (req, res) => {
 // ==================== PING DES SERVEURS ====================
 async function pingServers() {
   for (const server of SERVERS) {
+    // ⚠️ AJOUT : Si l'URL est vide, on skip ce serveur (il reste hors ligne)
+    if (!server.url || server.url.trim() === '') {
+      server.online = false;
+      continue;
+    }
+
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-      const res = await fetch(`${server.url}/health`, {
+      // ⚠️ MODIFIÉ : On s'assure que le slash final n'est pas dupliqué
+      const baseUrl = server.url.endsWith('/') ? server.url.slice(0, -1) : server.url;
+      const res = await fetch(`${baseUrl}/health`, {
         method: 'GET',
         signal: controller.signal
       });
@@ -509,6 +517,7 @@ async function pingServers() {
         server.online = false;
       }
     } catch (e) {
+      // Si on n'arrive pas à contacter le serveur, on le met hors ligne après 60s
       if (Date.now() - server.lastPing > 60000) {
         server.online = false;
         server.cpu = 0;
@@ -551,7 +560,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🔐 Clé API Admin : ${ADMIN_KEY.substring(0, 8)}...`);
   console.log(`🖥️ ${SERVERS.length} serveurs workers configurés :`);
   SERVERS.forEach(s => {
-    console.log(`   • Server ${s.id} (${s.name}) → ${s.url}`);
+    console.log(`   • Server ${s.id} (${s.name}) → ${s.url || 'Non configuré'}`);
   });
   console.log(`👥 Max par serveur : ${MAX_USERS_PER_SERVER}`);
   console.log('════════════════════════════════════════');
