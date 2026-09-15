@@ -3,199 +3,442 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>XENOBAN — Couplage Bot Sécurisé</title>
+  <title>HEXTECH — Couplage Bot Sécurisé</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
-      color: #e0e0e0;
+      font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #05070f;
+      background-image:
+        radial-gradient(ellipse at 15% 10%, rgba(0, 200, 255, 0.08) 0%, transparent 55%),
+        radial-gradient(ellipse at 85% 15%, rgba(255, 0, 128, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 90%, rgba(120, 0, 255, 0.07) 0%, transparent 55%),
+        linear-gradient(160deg, #05070f 0%, #0a0f1f 40%, #0d1228 70%, #080b18 100%);
+      color: #c8d6e5;
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 20px;
+      position: relative;
+      overflow-x: hidden;
     }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(0, 220, 255, 0.03) 0%, transparent 30%),
+        radial-gradient(circle at 80% 70%, rgba(255, 0, 128, 0.03) 0%, transparent 30%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
     .container {
-      max-width: 520px;
+      max-width: 540px;
       width: 100%;
-      background: #1a1f3a;
-      border-radius: 16px;
-      padding: 32px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      background: linear-gradient(145deg, rgba(12, 18, 35, 0.95) 0%, rgba(8, 12, 25, 0.98) 100%);
+      border-radius: 20px;
+      padding: 36px 32px 32px;
+      box-shadow:
+        0 0 0 1px rgba(0, 200, 255, 0.12),
+        0 0 40px rgba(0, 180, 255, 0.06),
+        0 0 80px rgba(120, 0, 255, 0.04),
+        0 25px 70px rgba(0, 0, 0, 0.6);
+      position: relative;
+      z-index: 1;
+      border: 1px solid rgba(0, 200, 255, 0.08);
+      overflow: hidden;
     }
+
+    .container::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent 0%, #00c8ff 20%, #7b2ff7 50%, #ff006e 80%, transparent 100%);
+      opacity: 0.85;
+    }
+
+    .container::after {
+      content: '';
+      position: absolute;
+      top: -50%; left: -50%;
+      width: 200%; height: 200%;
+      background: radial-gradient(ellipse at 30% 20%, rgba(0, 200, 255, 0.04) 0%, transparent 60%),
+                  radial-gradient(ellipse at 70% 80%, rgba(255, 0, 110, 0.03) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
     h1 {
-      color: #4ade80;
-      font-size: 1.8em;
-      margin-bottom: 8px;
+      font-size: 2.1em;
+      font-weight: 800;
       text-align: center;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #00c8ff 0%, #7b2ff7 40%, #ff006e 70%, #ff9500 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 6px;
+      position: relative;
+      text-shadow: 0 0 40px rgba(0, 200, 255, 0.15);
     }
+
+    h1::after {
+      content: '';
+      display: block;
+      width: 70px;
+      height: 2px;
+      margin: 12px auto 0;
+      background: linear-gradient(90deg, transparent, #00c8ff, #7b2ff7, #ff006e, transparent);
+      border-radius: 2px;
+      opacity: 0.8;
+    }
+
     .subtitle {
       text-align: center;
-      color: #94a3b8;
-      margin-bottom: 24px;
-      font-size: 0.9em;
-    }
-    .warning {
-      background: rgba(239, 68, 68, 0.1);
-      border-left: 4px solid #ef4444;
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 24px;
+      color: #6b7d99;
+      margin-bottom: 28px;
       font-size: 0.85em;
-      color: #fca5a5;
-      line-height: 1.5;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: 400;
     }
-    label { display: block; font-size: 0.9em; color: #94a3b8; margin-bottom: 8px; margin-top: 16px; }
+
+    label {
+      display: block;
+      font-size: 0.88em;
+      color: #7b8db5;
+      margin-bottom: 8px;
+      margin-top: 18px;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+    }
+
     input[type="tel"] {
       width: 100%;
-      padding: 14px;
-      background: #0a0e27;
-      border: 2px solid #2a3050;
+      padding: 15px 16px;
+      background: rgba(5, 8, 20, 0.8);
+      border: 1.5px solid rgba(0, 200, 255, 0.15);
       border-radius: 10px;
-      color: #e0e0e0;
+      color: #e0e8f5;
       font-size: 1em;
-      transition: 0.3s;
+      transition: all 0.35s ease;
+      letter-spacing: 1px;
+      font-family: 'Courier New', monospace;
     }
-    input[type="tel"]:focus { outline: none; border-color: #4ade80; }
+
+    input[type="tel"]:focus {
+      outline: none;
+      border-color: rgba(0, 200, 255, 0.6);
+      box-shadow: 0 0 0 3px rgba(0, 200, 255, 0.08), 0 0 25px rgba(0, 200, 255, 0.06);
+      background: rgba(5, 8, 22, 0.95);
+    }
+
+    input[type="tel"]::placeholder {
+      color: #3a4a6a;
+      font-family: 'Courier New', monospace;
+    }
+
     .checkbox-group {
       display: flex;
       align-items: flex-start;
-      gap: 10px;
-      margin-top: 20px;
-      padding: 14px;
-      background: rgba(251, 191, 36, 0.05);
+      gap: 12px;
+      margin-top: 22px;
+      padding: 16px;
+      background: rgba(255, 149, 0, 0.03);
       border-radius: 10px;
-      border: 1px solid rgba(251, 191, 36, 0.2);
+      border: 1px solid rgba(255, 149, 0, 0.15);
+      transition: border-color 0.3s, box-shadow 0.3s;
     }
+
+    .checkbox-group:hover {
+      border-color: rgba(255, 149, 0, 0.3);
+      box-shadow: 0 0 20px rgba(255, 149, 0, 0.05);
+    }
+
     .checkbox-group input[type="checkbox"] {
       margin-top: 3px;
       cursor: pointer;
       width: 18px;
       height: 18px;
-      accent-color: #4ade80;
+      accent-color: #00c8ff;
+      flex-shrink: 0;
     }
-    .checkbox-group label { margin: 0; color: #fbbf24; font-size: 0.85em; cursor: pointer; line-height: 1.5; }
+
+    .checkbox-group label {
+      margin: 0;
+      color: #c8a86b;
+      font-size: 0.82em;
+      cursor: pointer;
+      line-height: 1.65;
+    }
+
     button {
       width: 100%;
-      padding: 16px;
-      background: #4ade80;
-      color: #0a0e27;
+      padding: 17px;
+      background: linear-gradient(135deg, #00c8ff 0%, #7b2ff7 50%, #ff006e 100%);
+      background-size: 200% 200%;
+      color: #ffffff;
       border: none;
-      border-radius: 10px;
+      border-radius: 12px;
       font-size: 1em;
-      font-weight: bold;
+      font-weight: 700;
       cursor: pointer;
-      margin-top: 20px;
-      transition: 0.3s;
+      margin-top: 22px;
+      transition: all 0.4s ease;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 25px rgba(0, 200, 255, 0.2), 0 0 50px rgba(123, 47, 247, 0.1);
     }
-    button:hover:not(:disabled) { background: #22c55e; transform: translateY(-2px); }
-    button:disabled { background: #4a5568; cursor: not-allowed; }
+
+    button::before {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%;
+      width: 100%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+      transition: left 0.6s ease;
+    }
+
+    button:hover:not(:disabled)::before {
+      left: 100%;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-3px) scale(1.01);
+      box-shadow: 0 8px 35px rgba(0, 200, 255, 0.3), 0 0 70px rgba(123, 47, 247, 0.15);
+      background-position: 100% 50%;
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(-1px) scale(0.99);
+    }
+
+    button:disabled {
+      background: linear-gradient(135deg, #1a2035 0%, #151a30 100%);
+      color: #3a4a6a;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
     .result {
-      margin-top: 24px;
-      padding: 20px;
-      background: #0a0e27;
-      border-radius: 10px;
+      margin-top: 26px;
+      padding: 22px;
+      background: rgba(5, 8, 20, 0.7);
+      border-radius: 14px;
       display: none;
+      border: 1px solid rgba(0, 200, 255, 0.12);
+      animation: fadeInUp 0.5s ease;
     }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
     .result.show { display: block; }
-    .result h3 { color: #4ade80; margin-bottom: 12px; font-size: 1em; }
+
+    .result h3 {
+      color: #00c8ff;
+      margin-bottom: 14px;
+      font-size: 0.95em;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .result h3::before {
+      content: '';
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #00c8ff;
+      box-shadow: 0 0 10px #00c8ff, 0 0 20px rgba(0, 200, 255, 0.5);
+      animation: pulse 2s infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
     .code-box {
-      background: #1a1f3a;
-      padding: 16px;
-      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(5, 8, 22, 0.95) 0%, rgba(10, 15, 35, 0.95) 100%);
+      padding: 22px 16px;
+      border-radius: 12px;
       text-align: center;
       font-family: 'Courier New', monospace;
-      font-size: 1.8em;
-      letter-spacing: 4px;
-      color: #4ade80;
-      margin: 12px 0;
-      border: 2px solid #4ade80;
+      font-size: 2em;
+      letter-spacing: 6px;
+      font-weight: 700;
+      color: #00e5ff;
+      margin: 16px 0;
+      border: 1.5px solid rgba(0, 200, 255, 0.3);
+      box-shadow:
+        inset 0 0 30px rgba(0, 200, 255, 0.04),
+        0 0 25px rgba(0, 200, 255, 0.08);
       word-break: break-all;
+      text-shadow: 0 0 20px rgba(0, 200, 255, 0.35);
     }
-    .instructions { font-size: 0.85em; color: #94a3b8; line-height: 1.6; }
-    .instructions ol { padding-left: 20px; margin-top: 8px; }
-    .instructions li { margin: 4px 0; }
-    .error {
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid #ef4444;
-      padding: 12px;
-      border-radius: 8px;
-      color: #fca5a5;
-      margin-top: 16px;
-      display: none;
-      font-size: 0.9em;
+
+    .instructions {
+      font-size: 0.84em;
+      color: #7b8db5;
+      line-height: 1.75;
     }
-    .error.show { display: block; }
-    .info-box {
-      background: rgba(74, 222, 128, 0.05);
-      border: 1px solid rgba(74, 222, 128, 0.2);
-      padding: 12px;
-      border-radius: 8px;
-      margin-top: 16px;
-      font-size: 0.85em;
-      color: #86efac;
+
+    .instructions strong { color: #a0b8d5; }
+
+    .instructions ol {
+      padding-left: 22px;
+      margin-top: 10px;
     }
-    .footer { text-align: center; margin-top: 24px; font-size: 0.75em; color: #4a5568; }
-    .status-badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 0.75em;
+
+    .instructions li {
+      margin: 6px 0;
+      padding-left: 4px;
+    }
+
+    .instructions li::marker {
+      color: #7b2ff7;
       font-weight: bold;
     }
-    .status-pending { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
-    .status-ready { background: rgba(74, 222, 128, 0.2); color: #4ade80; }
-    .status-error { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
-    .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+
+    .error {
+      background: rgba(255, 0, 110, 0.06);
+      border: 1px solid rgba(255, 0, 110, 0.35);
+      padding: 14px 16px;
+      border-radius: 10px;
+      color: #ff6b9d;
+      margin-top: 16px;
+      display: none;
+      font-size: 0.88em;
+      line-height: 1.5;
+      animation: fadeInUp 0.4s ease;
+    }
+
+    .error.show { display: block; }
+
+    .info-box {
+      background: rgba(0, 200, 255, 0.05);
+      border: 1px solid rgba(0, 200, 255, 0.25);
+      padding: 14px 16px;
+      border-radius: 10px;
+      margin-top: 16px;
+      font-size: 0.85em;
+      color: #86d4ef;
+      line-height: 1.5;
+      animation: fadeInUp 0.4s ease;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 28px;
+      font-size: 0.72em;
+      color: #3a4a6a;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    .footer::before {
+      content: '';
+      display: block;
+      width: 40px;
+      height: 1px;
+      margin: 0 auto 12px;
+      background: linear-gradient(90deg, transparent, #7b2ff7, transparent);
+      opacity: 0.5;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
     .actions button {
       flex: 1;
       min-width: 140px;
-      padding: 12px;
-      font-size: 0.9em;
+      padding: 13px;
+      font-size: 0.85em;
       margin-top: 0;
+      letter-spacing: 1px;
     }
-    .btn-danger { background: #ef4444 !important; color: white !important; }
-    .btn-danger:hover:not(:disabled) { background: #dc2626 !important; }
-    .btn-secondary { background: #2a3050 !important; color: #e0e0e0 !important; }
-    .btn-secondary:hover:not(:disabled) { background: #3a4060 !important; }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #ff006e 0%, #dc2626 100%) !important;
+      box-shadow: 0 4px 20px rgba(255, 0, 110, 0.25) !important;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      box-shadow: 0 8px 30px rgba(255, 0, 110, 0.35) !important;
+    }
+
+    .btn-secondary {
+      background: linear-gradient(135deg, #1a2035 0%, #252d4a 100%) !important;
+      color: #a0b8d5 !important;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+      border: 1px solid rgba(0, 200, 255, 0.15) !important;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #252d4a 0%, #303a5f 100%) !important;
+      border-color: rgba(0, 200, 255, 0.3) !important;
+      box-shadow: 0 8px 30px rgba(0, 200, 255, 0.1) !important;
+    }
+
+    /* Scrollbar personnalisée */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #05070f; }
+    ::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, #00c8ff, #7b2ff7);
+      border-radius: 3px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>🤖 XENOBAN</h1>
+    <h1>⚡ HEXTECH</h1>
     <p class="subtitle">Couplage sécurisé de votre bot personnel</p>
-    
-    <div class="warning">
-      ⚠️ <strong>Avertissement important :</strong>
-      <br>Ce service utilise une bibliothèque non-officielle WhatsApp. Votre numéro peut être temporairement ou définitivement banni par WhatsApp. <strong>Utilisez un numéro secondaire</strong>, jamais votre numéro principal.
-    </div>
-    
+
     <label for="phone">📱 Votre numéro WhatsApp</label>
     <input type="tel" id="phone" placeholder="243XXXXXXXXX" maxlength="15" pattern="[0-9]+" autocomplete="off">
-    <p style="font-size: 0.75em; color: #6b7280; margin-top: 4px;">
+    <p style="font-size: 0.75em; color: #4a5a7a; margin-top: 6px; letter-spacing: 0.5px;">
       Format international sans le "+" (ex: 243983205767)
     </p>
-    
+
     <div class="checkbox-group">
       <input type="checkbox" id="consent">
       <label for="consent">
-        Je consens à coupler mon numéro WhatsApp avec XENOBAN. Je comprends que :
+        Je consens à coupler mon numéro WhatsApp avec HEXTECH. Je comprends que :
         <br>• Mon numéro peut être banni par WhatsApp
         <br>• Mes messages ne sont jamais stockés
         <br>• Je peux me déconnecter à tout moment depuis ce site
       </label>
     </div>
-    
+
     <button id="pairBtn" disabled>🔗 Générer mon code de couplage</button>
-    
+
     <div class="error" id="error"></div>
     <div class="info-box" id="info" style="display:none;"></div>
-    
+
     <div class="result" id="result">
-      <h3>✅ Code de couplage généré</h3>
+      <h3>Code de couplage généré</h3>
       <div class="code-box" id="codeBox">---</div>
-      
+
       <div class="instructions">
         <strong>📖 Étapes :</strong>
         <ol>
@@ -207,22 +450,22 @@
           <li>Attends la connexion (30 secondes max)</li>
         </ol>
       </div>
-      
+
       <div class="actions">
         <button class="btn-secondary" onclick="checkStatus()">🔄 Vérifier statut</button>
         <button class="btn-danger" onclick="disconnect()">🚪 Déconnecter</button>
       </div>
     </div>
-    
+
     <div class="footer">
-      XENOBAN V3 • Service privé • 10 utilisateurs maximum
+      HEXTECH V3 • Service privé • 10 utilisateurs maximum
     </div>
   </div>
 
   <script>
     // ⚠️ ADRESSE DU SERVEUR RENDER (à remplacer par la vraie URL)
     const API_URL = 'https://last-judment.onrender.com';
-    
+
     let currentPhone = null;
     let currentCode = null;
     const phoneInput = document.getElementById('phone');
@@ -232,72 +475,72 @@
     const codeBox = document.getElementById('codeBox');
     const errorDiv = document.getElementById('error');
     const infoDiv = document.getElementById('info');
-    
+
     function showError(msg) {
       errorDiv.textContent = '❌ ' + msg;
       errorDiv.classList.add('show');
       infoDiv.style.display = 'none';
     }
-    
+
     function showInfo(msg) {
       infoDiv.textContent = 'ℹ️ ' + msg;
       infoDiv.style.display = 'block';
       errorDiv.classList.remove('show');
     }
-    
+
     function updateBtn() {
       const phone = phoneInput.value.replace(/\D/g, '');
       pairBtn.disabled = !(phone.length >= 9 && consentCheck.checked);
     }
-    
+
     phoneInput.addEventListener('input', updateBtn);
     consentCheck.addEventListener('change', updateBtn);
-    
+
     pairBtn.addEventListener('click', async () => {
       const phone = phoneInput.value.replace(/\D/g, '');
-      
+
       pairBtn.disabled = true;
       pairBtn.textContent = '⏳ Génération en cours...';
       errorDiv.classList.remove('show');
       resultDiv.classList.remove('show');
-      
+
       try {
         const res = await fetch(`${API_URL}/api/pair`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phone, consent: true })
         });
-        
+
         const data = await res.json();
-        
+
         if (!res.ok) throw new Error(data.error || 'Erreur serveur');
-        
+
         currentPhone = phone;
         currentCode = data.code;
-        
+
         codeBox.textContent = data.code;
         resultDiv.classList.add('show');
         pairBtn.textContent = '✅ Code généré';
         pairBtn.disabled = false;
-        
+
         // Polling automatique du statut
         pollStatus();
-        
+
       } catch (e) {
         showError(e.message);
         pairBtn.textContent = '🔗 Générer mon code de couplage';
         pairBtn.disabled = false;
       }
     });
-    
+
     async function checkStatus() {
       if (!currentPhone) return;
       try {
         const res = await fetch(`${API_URL}/api/status/${currentPhone}`);
         const data = await res.json();
-        
+
         if (!res.ok) throw new Error(data.error || 'Erreur');
-        
+
         if (data.status === 'connected') {
           showInfo('✅ Votre bot est connecté et actif !');
         } else if (data.status === 'pending') {
@@ -309,39 +552,39 @@
         showError(e.message);
       }
     }
-    
+
     async function disconnect() {
       if (!currentPhone) return;
       if (!confirm('Voulez-vous vraiment déconnecter votre bot ?')) return;
-      
+
       try {
         const res = await fetch(`${API_URL}/api/disconnect/${currentPhone}`, { method: 'POST' });
         const data = await res.json();
-        
+
         if (!res.ok) throw new Error(data.error || 'Erreur');
-        
+
         showInfo('✅ Bot déconnecté. Vous pouvez en créer un nouveau.');
         resultDiv.classList.remove('show');
         currentPhone = null;
         currentCode = null;
-        
+
       } catch (e) {
         showError(e.message);
       }
     }
-    
+
     async function pollStatus() {
       if (!currentPhone) return;
       try {
         const res = await fetch(`${API_URL}/api/status/${currentPhone}`);
         const data = await res.json();
-        
+
         if (data.status === 'connected') {
           showInfo('✅ Votre bot est connecté et actif !');
           return;
         }
       } catch (e) {}
-      
+
       // Revérifier dans 10 secondes
       setTimeout(pollStatus, 10000);
     }
