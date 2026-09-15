@@ -17,13 +17,12 @@ const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toSt
 const ADMIN_KEY = process.env.ADMIN_KEY || 'xenoban-admin-2026';
 
 // ==================== CONFIGURATION DES 4 SERVEURS ====================
-// ⚠️ L'URL est celle de ton serveur Render
-// Tu dois remplacer les URLs par celles de tes 4 workers KataBump
+// ⚠️ Les URLs doivent correspondre à tes 4 workers déployés
 const SERVERS = [
   {
     id: 1,
-    name: 'Serveur 1',
-    url: 'https://last-judment.onrender.com', // ⚠️ MODIFIÉ : Retiré le slash final
+    name: 'Serveur 1 - Web',
+    url: process.env.SERVER_1_URL || 'https://last-judment.onrender.com',
     lastPing: 0,
     online: false,
     cpu: 0,
@@ -32,8 +31,8 @@ const SERVERS = [
   },
   {
     id: 2,
-    name: 'Serveur 2',
-    url: '', // ⚠️ MODIFIÉ : Vide pour l'instant (sera rempli quand tu auras un 2ème worker)
+    name: 'Serveur 2 - Database',
+    url: process.env.SERVER_2_URL || '',
     lastPing: 0,
     online: false,
     cpu: 0,
@@ -42,8 +41,8 @@ const SERVERS = [
   },
   {
     id: 3,
-    name: 'Serveur 3',
-    url: '', // ⚠️ MODIFIÉ : Vide
+    name: 'Serveur 3 - Game',
+    url: process.env.SERVER_3_URL || '',
     lastPing: 0,
     online: false,
     cpu: 0,
@@ -52,8 +51,8 @@ const SERVERS = [
   },
   {
     id: 4,
-    name: 'Serveur 4',
-    url: '', // ⚠️ MODIFIÉ : Vide
+    name: 'Serveur 4 - App',
+    url: process.env.SERVER_4_URL || '',
     lastPing: 0,
     online: false,
     cpu: 0,
@@ -88,46 +87,20 @@ function saveUsers(users) {
   }
 }
 
-// ==================== CHIFFREMENT AES-256 ====================
-function encrypt(text) {
-  try {
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
-    let encrypted = cipher.update(text);
-    encrypted = Buffer.concat([encrypted, cipher.final()]);
-    return iv.toString('hex') + ':' + encrypted.toString('hex');
-  } catch (e) {
-    return null;
-  }
-}
-
-function decrypt(text) {
-  try {
-    const [ivHex, encryptedHex] = text.split(':');
-    const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
-    let decrypted = decipher.update(Buffer.from(encryptedHex, 'hex'));
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
-  } catch (e) {
-    return null;
-  }
-}
-
-// ==================== SYSTÈME DE QUEUE ====================
+// ==================== QUEUE DES REQUÊTES ====================
 const pendingRequests = new Map();
 
 function createRequest(phone, serverId) {
   return new Promise((resolve, reject) => {
     const requestId = crypto.randomBytes(8).toString('hex');
-
+    
     const timeout = setTimeout(() => {
       if (pendingRequests.has(requestId)) {
         pendingRequests.delete(requestId);
         reject(new Error('Timeout : le worker n\'a pas répondu dans les 90 secondes'));
       }
     }, 90000);
-
+    
     pendingRequests.set(requestId, {
       phone,
       serverId,
@@ -141,11 +114,10 @@ function createRequest(phone, serverId) {
 
 // ==================== ROUTES PUBLIQUES ====================
 
-// Page d'accueil (JSON si pas de index.html)
+// Page d'accueil
 app.get('/', (req, res) => {
   const users = loadUsers();
   const connectedCount = Object.values(users).filter(u => u.status === 'connected').length;
-
   res.json({
     status: 'ok',
     total: Object.keys(users).length,
@@ -184,31 +156,24 @@ app.get('/api/servers', (req, res) => {
 app.post('/api/pair', async (req, res) => {
   const { phone, consent, serverId } = req.body;
 
-  // ========== VALIDATION ==========
-  if (!consent) {
-    return res.status(400).json({ error: 'Consentement requis' });
-  }
+  // Validation
+  if (!consent) return res.status(400).json({ error: 'Consentement requis' });
+  if (!phone || !/^\d{9,15}$/.test(phone)) return res.status(400).json({ error: 'Numéro invalide (9-15 chiffres)' });
 
-  if (!phone || !/^\d{9,15}$/.test(phone)) {
-    return res.status(400).json({ error: 'Numéro invalide (9-15 chiffres)' });
-  }
-
-  // ========== AUTO-SÉLECTION DU SERVEUR ==========
-  let targetServerId = serverId;
   const users = loadUsers();
 
+  // Auto-sélection du serveur si non précisé
+  let targetServerId = serverId;
   if (!targetServerId || ![1, 2, 3, 4].includes(parseInt(targetServerId))) {
     for (const srv of SERVERS) {
       const currentOnServer = Object.values(users).filter(u =>
         u.serverId === srv.id && u.status !== 'disconnected'
       ).length;
-
       if (srv.online && currentOnServer < MAX_USERS_PER_SERVER) {
         targetServerId = srv.id;
         break;
       }
     }
-
     if (!targetServerId) {
       return res.status(503).json({ error: 'Aucun serveur disponible. Réessayez plus tard.' });
     }
@@ -217,15 +182,10 @@ app.post('/api/pair', async (req, res) => {
   targetServerId = parseInt(targetServerId);
   const server = SERVERS.find(s => s.id === targetServerId);
 
-  if (!server) {
-    return res.status(404).json({ error: 'Serveur introuvable' });
-  }
+  if (!server) return res.status(404).json({ error: 'Serveur introuvable' });
+  if (!server.online) return res.status(503).json({ error: `Le ${server.name} est actuellement hors ligne` });
 
-  if (!server.online) {
-    return res.status(503).json({ error: `Le ${server.name} est actuellement hors ligne` });
-  }
-
-  // ========== VÉRIFIER SI LE SERVEUR EST PLEIN ==========
+  // Vérifier si le serveur est plein
   const currentOnServer = Object.values(users).filter(u =>
     u.serverId === targetServerId && u.status !== 'disconnected'
   ).length;
@@ -236,14 +196,12 @@ app.post('/api/pair', async (req, res) => {
     });
   }
 
-  // ========== VÉRIFIER SI DÉJÀ COUPLÉ ==========
+  // Vérifier si déjà couplé
   if (users[phone] && users[phone].status === 'connected') {
-    return res.status(409).json({
-      error: 'Ce numéro est déjà couplé. Déconnectez-le d\'abord.'
-    });
+    return res.status(409).json({ error: 'Ce numéro est déjà couplé. Déconnectez-le d\'abord.' });
   }
 
-  // ========== RÉUTILISER LE CODE SI EXISTANT ==========
+  // Réutiliser le code si existant
   if (users[phone] && users[phone].status === 'pending' && users[phone].code) {
     return res.json({
       success: true,
@@ -255,7 +213,7 @@ app.post('/api/pair', async (req, res) => {
     });
   }
 
-  // ========== CRÉER L'UTILISATEUR ==========
+  // Créer l'utilisateur
   users[phone] = {
     phone,
     serverId: targetServerId,
@@ -266,10 +224,9 @@ app.post('/api/pair', async (req, res) => {
   };
   saveUsers(users);
 
-  // ========== DEMANDER LE CODE AU WORKER ==========
+  // Demander le code au worker
   try {
     const code = await createRequest(phone, targetServerId);
-
     if (!code) throw new Error('Aucun code retourné par le worker');
 
     users[phone].code = code;
@@ -291,7 +248,6 @@ app.post('/api/pair', async (req, res) => {
     users[phone].status = 'error';
     users[phone].error = e.message;
     saveUsers(users);
-
     console.error(`❌ Erreur pour ${phone}:`, e.message);
     res.status(500).json({ error: e.message });
   }
@@ -302,9 +258,7 @@ app.get('/api/status/:phone', (req, res) => {
   const { phone } = req.params;
   const users = loadUsers();
 
-  if (!users[phone]) {
-    return res.status(404).json({ error: 'Numéro non enregistré' });
-  }
+  if (!users[phone]) return res.status(404).json({ error: 'Numéro non enregistré' });
 
   res.json({
     phone: users[phone].phone,
@@ -320,9 +274,7 @@ app.post('/api/disconnect/:phone', (req, res) => {
   const { phone } = req.params;
   const users = loadUsers();
 
-  if (!users[phone]) {
-    return res.status(404).json({ error: 'Numéro non enregistré' });
-  }
+  if (!users[phone]) return res.status(404).json({ error: 'Numéro non enregistré' });
 
   users[phone].status = 'disconnect_requested';
   users[phone].disconnectAt = Date.now();
@@ -332,20 +284,17 @@ app.post('/api/disconnect/:phone', (req, res) => {
   res.json({ success: true, message: 'Déconnexion en cours...' });
 });
 
-// ==================== ROUTES WORKER ====================
+// ==================== ROUTES WORKER (par serveur) ====================
 
-// ========== LE WORKER DEMANDE LES REQUÊTES ==========
+// Le worker demande les requêtes en attente
 app.get('/api/worker/:serverId/pending', (req, res) => {
   const adminKey = req.headers['x-admin-key'];
-  if (adminKey !== ADMIN_KEY) {
-    return res.status(401).json({ error: 'Non autorisé' });
-  }
+  if (adminKey !== ADMIN_KEY) return res.status(401).json({ error: 'Non autorisé' });
 
   const serverId = parseInt(req.params.serverId);
-  if (![1, 2, 3, 4].includes(serverId)) {
-    return res.status(400).json({ error: 'Serveur invalide' });
-  }
+  if (![1, 2, 3, 4].includes(serverId)) return res.status(400).json({ error: 'Serveur invalide' });
 
+  // Marquer le serveur comme en ligne (il vient de nous parler)
   const server = SERVERS.find(s => s.id === serverId);
   if (server) {
     server.lastPing = Date.now();
@@ -362,12 +311,10 @@ app.get('/api/worker/:serverId/pending', (req, res) => {
   res.json(requests);
 });
 
-// ========== LE WORKER RENVOIE LE RÉSULTAT ==========
+// Le worker renvoie le résultat
 app.post('/api/worker/:serverId/result', (req, res) => {
   const adminKey = req.headers['x-admin-key'];
-  if (adminKey !== ADMIN_KEY) {
-    return res.status(401).json({ error: 'Non autorisé' });
-  }
+  if (adminKey !== ADMIN_KEY) return res.status(401).json({ error: 'Non autorisé' });
 
   const { requestId, code, error } = req.body;
 
@@ -375,7 +322,6 @@ app.post('/api/worker/:serverId/result', (req, res) => {
     const { resolve, reject, timeout } = pendingRequests.get(requestId);
     clearTimeout(timeout);
     pendingRequests.delete(requestId);
-
     if (error) reject(new Error(error));
     else resolve(code);
   }
@@ -383,12 +329,10 @@ app.post('/api/worker/:serverId/result', (req, res) => {
   res.json({ success: true });
 });
 
-// ========== LE WORKER SIGNALE UNE CONNEXION ==========
+// Le worker signale une connexion
 app.post('/api/worker/:serverId/connected', (req, res) => {
   const adminKey = req.headers['x-admin-key'];
-  if (adminKey !== ADMIN_KEY) {
-    return res.status(401).json({ error: 'Non autorisé' });
-  }
+  if (adminKey !== ADMIN_KEY) return res.status(401).json({ error: 'Non autorisé' });
 
   const { phone } = req.body;
   const users = loadUsers();
@@ -403,12 +347,10 @@ app.post('/api/worker/:serverId/connected', (req, res) => {
   res.json({ success: true });
 });
 
-// ========== LE WORKER SIGNALE UNE DÉCONNEXION ==========
+// Le worker signale une déconnexion
 app.post('/api/worker/:serverId/disconnected', (req, res) => {
   const adminKey = req.headers['x-admin-key'];
-  if (adminKey !== ADMIN_KEY) {
-    return res.status(401).json({ error: 'Non autorisé' });
-  }
+  if (adminKey !== ADMIN_KEY) return res.status(401).json({ error: 'Non autorisé' });
 
   const { phone } = req.body;
   const users = loadUsers();
@@ -423,12 +365,10 @@ app.post('/api/worker/:serverId/disconnected', (req, res) => {
   res.json({ success: true });
 });
 
-// ========== LE WORKER DEMANDE LES DÉCONNEXIONS ==========
+// Le worker demande les déconnexions
 app.get('/api/worker/:serverId/disconnect-list', (req, res) => {
   const adminKey = req.headers['x-admin-key'];
-  if (adminKey !== ADMIN_KEY) {
-    return res.status(401).json({ error: 'Non autorisé' });
-  }
+  if (adminKey !== ADMIN_KEY) return res.status(401).json({ error: 'Non autorisé' });
 
   const serverId = parseInt(req.params.serverId);
   const users = loadUsers();
@@ -440,12 +380,10 @@ app.get('/api/worker/:serverId/disconnect-list', (req, res) => {
   res.json(toDisconnect);
 });
 
-// ========== LE WORKER CONFIRME LA DÉCONNEXION ==========
+// Le worker confirme la déconnexion
 app.post('/api/worker/:serverId/disconnect-done', (req, res) => {
   const adminKey = req.headers['x-admin-key'];
-  if (adminKey !== ADMIN_KEY) {
-    return res.status(401).json({ error: 'Non autorisé' });
-  }
+  if (adminKey !== ADMIN_KEY) return res.status(401).json({ error: 'Non autorisé' });
 
   const { phone } = req.body;
   const users = loadUsers();
@@ -459,12 +397,10 @@ app.post('/api/worker/:serverId/disconnect-done', (req, res) => {
   res.json({ success: true });
 });
 
-// ========== LE WORKER ENVOIE SES STATS ==========
+// Le worker envoie ses stats (CPU/RAM)
 app.post('/api/worker/:serverId/stats', (req, res) => {
   const adminKey = req.headers['x-admin-key'];
-  if (adminKey !== ADMIN_KEY) {
-    return res.status(401).json({ error: 'Non autorisé' });
-  }
+  if (adminKey !== ADMIN_KEY) return res.status(401).json({ error: 'Non autorisé' });
 
   const serverId = parseInt(req.params.serverId);
   const { cpu, ram, uptime } = req.body;
@@ -484,9 +420,12 @@ app.post('/api/worker/:serverId/stats', (req, res) => {
 // ==================== PING DES SERVEURS ====================
 async function pingServers() {
   for (const server of SERVERS) {
-    // ⚠️ AJOUT : Si l'URL est vide, on skip ce serveur (il reste hors ligne)
+    // Si l'URL est vide, on skip (le serveur reste hors ligne)
     if (!server.url || server.url.trim() === '') {
-      server.online = false;
+      // On ne marque pas offline si on a reçu un ping récent
+      if (Date.now() - server.lastPing > 90000) {
+        server.online = false;
+      }
       continue;
     }
 
@@ -494,7 +433,6 @@ async function pingServers() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-      // ⚠️ MODIFIÉ : On s'assure que le slash final n'est pas dupliqué
       const baseUrl = server.url.endsWith('/') ? server.url.slice(0, -1) : server.url;
       const res = await fetch(`${baseUrl}/health`, {
         method: 'GET',
@@ -513,11 +451,9 @@ async function pingServers() {
           if (data.ram !== undefined) server.ram = data.ram;
           if (data.uptime !== undefined) server.uptime = data.uptime;
         } catch (e) {}
-      } else {
-        server.online = false;
       }
     } catch (e) {
-      // Si on n'arrive pas à contacter le serveur, on le met hors ligne après 60s
+      // Si pas de ping depuis plus de 60 secondes, on marque hors ligne
       if (Date.now() - server.lastPing > 60000) {
         server.online = false;
         server.cpu = 0;
@@ -556,13 +492,12 @@ setInterval(() => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log('════════════════════════════════════════');
   console.log(`🚀 Serveur maître HEXTECH démarré`);
-  console.log(`📊 Port : ${PORT}`);
-  console.log(`🔐 Clé API Admin : ${ADMIN_KEY.substring(0, 8)}...`);
+  console.log(`📊 Port: ${PORT}`);
   console.log(`🖥️ ${SERVERS.length} serveurs workers configurés :`);
   SERVERS.forEach(s => {
     console.log(`   • Server ${s.id} (${s.name}) → ${s.url || 'Non configuré'}`);
   });
-  console.log(`👥 Max par serveur : ${MAX_USERS_PER_SERVER}`);
+  console.log(`👥 Max par serveur: ${MAX_USERS_PER_SERVER}`);
   console.log('════════════════════════════════════════');
 });
 
