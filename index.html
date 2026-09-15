@@ -3,589 +3,670 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HEXTECH — Couplage Bot Sécurisé</title>
+  <title>HEXTECH — Dashboard de Couplage</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    
     body {
-      font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #05070f;
-      background-image:
-        radial-gradient(ellipse at 15% 10%, rgba(0, 200, 255, 0.08) 0%, transparent 55%),
-        radial-gradient(ellipse at 85% 15%, rgba(255, 0, 128, 0.06) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 90%, rgba(120, 0, 255, 0.07) 0%, transparent 55%),
-        linear-gradient(160deg, #05070f 0%, #0a0f1f 40%, #0d1228 70%, #080b18 100%);
-      color: #c8d6e5;
+      background-color: #080a10;
+      color: #e2e8f0;
       min-height: 100vh;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .dashboard {
+      width: 100%;
+      max-width: 1200px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+    .header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header p {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    .stats-container { display: flex; gap: 12px; }
+    .stat-card {
+      background: #0f131a;
+      border: 1px solid #1e2532;
+      border-radius: 8px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .stat-icon { font-size: 1.2rem; }
+    .stat-info { display: flex; flex-direction: column; }
+    .stat-value { font-size: 1.1rem; font-weight: bold; color: #ffffff; }
+    .stat-label { font-size: 0.65rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .servers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 15px;
+    }
+
+    .server-card {
+      background: #0f131a;
+      border: 1px solid #1e2532;
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      transition: all 0.3s ease;
+    }
+    .server-card.full { border-color: #ff006e; box-shadow: 0 0 15px rgba(255, 0, 110, 0.1); }
+    .server-card.offline { opacity: 0.5; }
+    .server-card.selected { border-color: #00c8ff; box-shadow: 0 0 20px rgba(0, 200, 255, 0.2); }
+
+    .card-header { display: flex; justify-content: space-between; align-items: center; }
+    .server-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #ffffff;
+    }
+    .server-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
-      position: relative;
-      overflow-x: hidden;
+      font-size: 1rem;
     }
+    .icon-web { background: rgba(0, 200, 255, 0.1); color: #00c8ff; }
+    .icon-db { background: rgba(123, 47, 247, 0.1); color: #7b2ff7; }
+    .icon-game { background: rgba(0, 255, 128, 0.1); color: #00ff80; }
+    .icon-app { background: rgba(255, 149, 0, 0.1); color: #ff9500; }
 
-    body::before {
-      content: '';
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background:
-        radial-gradient(circle at 20% 30%, rgba(0, 220, 255, 0.03) 0%, transparent 30%),
-        radial-gradient(circle at 80% 70%, rgba(255, 0, 128, 0.03) 0%, transparent 30%);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .container {
-      max-width: 540px;
-      width: 100%;
-      background: linear-gradient(145deg, rgba(12, 18, 35, 0.95) 0%, rgba(8, 12, 25, 0.98) 100%);
+    .status-badge {
+      font-size: 0.7rem;
+      padding: 4px 10px;
       border-radius: 20px;
-      padding: 36px 32px 32px;
-      box-shadow:
-        0 0 0 1px rgba(0, 200, 255, 0.12),
-        0 0 40px rgba(0, 180, 255, 0.06),
-        0 0 80px rgba(120, 0, 255, 0.04),
-        0 25px 70px rgba(0, 0, 0, 0.6);
-      position: relative;
-      z-index: 1;
-      border: 1px solid rgba(0, 200, 255, 0.08);
-      overflow: hidden;
-    }
-
-    .container::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent 0%, #00c8ff 20%, #7b2ff7 50%, #ff006e 80%, transparent 100%);
-      opacity: 0.85;
-    }
-
-    .container::after {
-      content: '';
-      position: absolute;
-      top: -50%; left: -50%;
-      width: 200%; height: 200%;
-      background: radial-gradient(ellipse at 30% 20%, rgba(0, 200, 255, 0.04) 0%, transparent 60%),
-                  radial-gradient(ellipse at 70% 80%, rgba(255, 0, 110, 0.03) 0%, transparent 60%);
-      pointer-events: none;
-      z-index: -1;
-    }
-
-    h1 {
-      font-size: 2.1em;
-      font-weight: 800;
-      text-align: center;
-      letter-spacing: 4px;
-      text-transform: uppercase;
-      background: linear-gradient(135deg, #00c8ff 0%, #7b2ff7 40%, #ff006e 70%, #ff9500 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: 6px;
-      position: relative;
-      text-shadow: 0 0 40px rgba(0, 200, 255, 0.15);
-    }
-
-    h1::after {
-      content: '';
-      display: block;
-      width: 70px;
-      height: 2px;
-      margin: 12px auto 0;
-      background: linear-gradient(90deg, transparent, #00c8ff, #7b2ff7, #ff006e, transparent);
-      border-radius: 2px;
-      opacity: 0.8;
-    }
-
-    .subtitle {
-      text-align: center;
-      color: #6b7d99;
-      margin-bottom: 28px;
-      font-size: 0.85em;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      font-weight: 400;
-    }
-
-    label {
-      display: block;
-      font-size: 0.88em;
-      color: #7b8db5;
-      margin-bottom: 8px;
-      margin-top: 18px;
-      letter-spacing: 0.5px;
-      font-weight: 500;
-    }
-
-    input[type="tel"] {
-      width: 100%;
-      padding: 15px 16px;
-      background: rgba(5, 8, 20, 0.8);
-      border: 1.5px solid rgba(0, 200, 255, 0.15);
-      border-radius: 10px;
-      color: #e0e8f5;
-      font-size: 1em;
-      transition: all 0.35s ease;
-      letter-spacing: 1px;
-      font-family: 'Courier New', monospace;
-    }
-
-    input[type="tel"]:focus {
-      outline: none;
-      border-color: rgba(0, 200, 255, 0.6);
-      box-shadow: 0 0 0 3px rgba(0, 200, 255, 0.08), 0 0 25px rgba(0, 200, 255, 0.06);
-      background: rgba(5, 8, 22, 0.95);
-    }
-
-    input[type="tel"]::placeholder {
-      color: #3a4a6a;
-      font-family: 'Courier New', monospace;
-    }
-
-    .checkbox-group {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      margin-top: 22px;
-      padding: 16px;
-      background: rgba(255, 149, 0, 0.03);
-      border-radius: 10px;
-      border: 1px solid rgba(255, 149, 0, 0.15);
-      transition: border-color 0.3s, box-shadow 0.3s;
-    }
-
-    .checkbox-group:hover {
-      border-color: rgba(255, 149, 0, 0.3);
-      box-shadow: 0 0 20px rgba(255, 149, 0, 0.05);
-    }
-
-    .checkbox-group input[type="checkbox"] {
-      margin-top: 3px;
-      cursor: pointer;
-      width: 18px;
-      height: 18px;
-      accent-color: #00c8ff;
-      flex-shrink: 0;
-    }
-
-    .checkbox-group label {
-      margin: 0;
-      color: #c8a86b;
-      font-size: 0.82em;
-      cursor: pointer;
-      line-height: 1.65;
-    }
-
-    button {
-      width: 100%;
-      padding: 17px;
-      background: linear-gradient(135deg, #00c8ff 0%, #7b2ff7 50%, #ff006e 100%);
-      background-size: 200% 200%;
-      color: #ffffff;
-      border: none;
-      border-radius: 12px;
-      font-size: 1em;
-      font-weight: 700;
-      cursor: pointer;
-      margin-top: 22px;
-      transition: all 0.4s ease;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      position: relative;
-      overflow: hidden;
-      box-shadow: 0 4px 25px rgba(0, 200, 255, 0.2), 0 0 50px rgba(123, 47, 247, 0.1);
-    }
-
-    button::before {
-      content: '';
-      position: absolute;
-      top: 0; left: -100%;
-      width: 100%; height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
-      transition: left 0.6s ease;
-    }
-
-    button:hover:not(:disabled)::before {
-      left: 100%;
-    }
-
-    button:hover:not(:disabled) {
-      transform: translateY(-3px) scale(1.01);
-      box-shadow: 0 8px 35px rgba(0, 200, 255, 0.3), 0 0 70px rgba(123, 47, 247, 0.15);
-      background-position: 100% 50%;
-    }
-
-    button:active:not(:disabled) {
-      transform: translateY(-1px) scale(0.99);
-    }
-
-    button:disabled {
-      background: linear-gradient(135deg, #1a2035 0%, #151a30 100%);
-      color: #3a4a6a;
-      cursor: not-allowed;
-      box-shadow: none;
-      transform: none;
-    }
-
-    .result {
-      margin-top: 26px;
-      padding: 22px;
-      background: rgba(5, 8, 20, 0.7);
-      border-radius: 14px;
-      display: none;
-      border: 1px solid rgba(0, 200, 255, 0.12);
-      animation: fadeInUp 0.5s ease;
-    }
-
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(15px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .result.show { display: block; }
-
-    .result h3 {
-      color: #00c8ff;
-      margin-bottom: 14px;
-      font-size: 0.95em;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
+      font-weight: 600;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 5px;
     }
+    .status-badge.online { background: rgba(0, 255, 128, 0.1); color: #00ff80; border: 1px solid rgba(0, 255, 128, 0.2); }
+    .status-badge.full { background: rgba(255, 0, 110, 0.1); color: #ff006e; border: 1px solid rgba(255, 0, 110, 0.2); }
+    .status-badge.offline { background: rgba(100, 116, 139, 0.1); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.2); }
+    .status-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
-    .result h3::before {
-      content: '';
-      display: inline-block;
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: #00c8ff;
-      box-shadow: 0 0 10px #00c8ff, 0 0 20px rgba(0, 200, 255, 0.5);
-      animation: pulse 2s infinite;
-      flex-shrink: 0;
-    }
+    .card-body { display: flex; flex-direction: column; gap: 12px; }
+    .metric-row { display: flex; justify-content: space-between; font-size: 0.75rem; color: #64748b; margin-bottom: 4px; }
+    .metric-row span:last-child { color: #e2e8f0; font-weight: 500; }
+    .progress-bar { width: 100%; height: 4px; background: #1e2532; border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+    .fill-green { background: #00ff80; }
+    .fill-blue { background: #00c8ff; }
+    .fill-purple { background: #7b2ff7; }
+    .fill-orange { background: #ff9500; }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.8); }
-    }
-
-    .code-box {
-      background: linear-gradient(135deg, rgba(5, 8, 22, 0.95) 0%, rgba(10, 15, 35, 0.95) 100%);
-      padding: 22px 16px;
-      border-radius: 12px;
-      text-align: center;
-      font-family: 'Courier New', monospace;
-      font-size: 2em;
-      letter-spacing: 6px;
-      font-weight: 700;
-      color: #00e5ff;
-      margin: 16px 0;
-      border: 1.5px solid rgba(0, 200, 255, 0.3);
-      box-shadow:
-        inset 0 0 30px rgba(0, 200, 255, 0.04),
-        0 0 25px rgba(0, 200, 255, 0.08);
-      word-break: break-all;
-      text-shadow: 0 0 20px rgba(0, 200, 255, 0.35);
-    }
-
-    .instructions {
-      font-size: 0.84em;
-      color: #7b8db5;
-      line-height: 1.75;
-    }
-
-    .instructions strong { color: #a0b8d5; }
-
-    .instructions ol {
-      padding-left: 22px;
-      margin-top: 10px;
-    }
-
-    .instructions li {
-      margin: 6px 0;
-      padding-left: 4px;
-    }
-
-    .instructions li::marker {
-      color: #7b2ff7;
-      font-weight: bold;
-    }
-
-    .error {
-      background: rgba(255, 0, 110, 0.06);
-      border: 1px solid rgba(255, 0, 110, 0.35);
-      padding: 14px 16px;
-      border-radius: 10px;
-      color: #ff6b9d;
-      margin-top: 16px;
-      display: none;
-      font-size: 0.88em;
-      line-height: 1.5;
-      animation: fadeInUp 0.4s ease;
-    }
-
-    .error.show { display: block; }
-
-    .info-box {
-      background: rgba(0, 200, 255, 0.05);
-      border: 1px solid rgba(0, 200, 255, 0.25);
-      padding: 14px 16px;
-      border-radius: 10px;
-      margin-top: 16px;
-      font-size: 0.85em;
-      color: #86d4ef;
-      line-height: 1.5;
-      animation: fadeInUp 0.4s ease;
-    }
-
-    .footer {
-      text-align: center;
-      margin-top: 28px;
-      font-size: 0.72em;
-      color: #3a4a6a;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      font-weight: 500;
-    }
-
-    .footer::before {
-      content: '';
-      display: block;
-      width: 40px;
-      height: 1px;
-      margin: 0 auto 12px;
-      background: linear-gradient(90deg, transparent, #7b2ff7, transparent);
-      opacity: 0.5;
-    }
-
-    .actions {
+    .card-footer {
       display: flex;
-      gap: 10px;
-      margin-top: 18px;
-      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 5px;
+      padding-top: 15px;
+      border-top: 1px solid #1e2532;
+    }
+    .uptime { font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 5px; }
+    .uptime::before { content: '🕒'; font-size: 0.8rem; }
+
+    .btn-select {
+      background: #1e2532;
+      color: #e2e8f0;
+      border: 1px solid #2d3748;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-select:hover:not(:disabled) {
+      background: #00c8ff;
+      color: #080a10;
+      border-color: #00c8ff;
+      box-shadow: 0 0 15px rgba(0, 200, 255, 0.4);
+    }
+    .btn-select.selected {
+      background: #00c8ff;
+      color: #080a10;
+      border-color: #00c8ff;
+      box-shadow: 0 0 15px rgba(0, 200, 255, 0.4);
+    }
+    .btn-select:disabled {
+      background: #1e2532;
+      color: #4a5568;
+      cursor: not-allowed;
+      border-color: #2d3748;
     }
 
-    .actions button {
-      flex: 1;
-      min-width: 140px;
-      padding: 13px;
-      font-size: 0.85em;
-      margin-top: 0;
-      letter-spacing: 1px;
+    .bottom-section {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 15px;
     }
+    @media (max-width: 768px) { .bottom-section { grid-template-columns: 1fr; } }
 
-    .btn-danger {
-      background: linear-gradient(135deg, #ff006e 0%, #dc2626 100%) !important;
-      box-shadow: 0 4px 20px rgba(255, 0, 110, 0.25) !important;
+    .panel {
+      background: #0f131a;
+      border: 1px solid #1e2532;
+      border-radius: 12px;
+      padding: 18px;
     }
+    .panel-title {
+      font-size: 0.85rem;
+      color: #ffffff;
+      font-weight: 600;
+      margin-bottom: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .panel-legend { display: flex; gap: 10px; font-size: 0.7rem; }
+    .legend-item { display: flex; align-items: center; gap: 4px; color: #64748b; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot-blue { background: #00c8ff; } 
+    .dot-purple { background: #7b2ff7; } 
+    .dot-orange { background: #ff9500; }
 
-    .btn-danger:hover:not(:disabled) {
-      box-shadow: 0 8px 30px rgba(255, 0, 110, 0.35) !important;
+    .chart-container {
+      height: 120px;
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      padding-top: 10px;
+      border-bottom: 1px solid #1e2532;
+      border-left: 1px solid #1e2532;
     }
+    .chart-bar { flex: 1; background: linear-gradient(to top, rgba(0, 200, 255, 0.1), #00c8ff); border-radius: 2px 2px 0 0; transition: height 0.5s ease; }
+    
+    .activity-list { display: flex; flex-direction: column; gap: 12px; }
+    .activity-item { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; }
+    .activity-dot { width: 8px; height: 8px; border-radius: 50%; background: #00ff80; }
+    .activity-text { color: #94a3b8; flex: 1; }
+    .activity-time { color: #64748b; font-size: 0.7rem; }
 
-    .btn-secondary {
-      background: linear-gradient(135deg, #1a2035 0%, #252d4a 100%) !important;
-      color: #a0b8d5 !important;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
-      border: 1px solid rgba(0, 200, 255, 0.15) !important;
+    .form-panel {
+      background: #0f131a;
+      border: 1px solid #1e2532;
+      border-radius: 12px;
+      padding: 25px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      animation: slideUp 0.5s ease;
     }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    
+    .form-panel h2 { font-size: 1.1rem; color: #00c8ff; margin-bottom: 5px; }
+    .form-panel p { font-size: 0.8rem; color: #64748b; }
+    
+    input[type="tel"] {
+      width: 100%; padding: 14px; background: #080a10; border: 1px solid #1e2532;
+      border-radius: 8px; color: #e2e8f0; font-size: 0.95rem; font-family: monospace;
+    }
+    input[type="tel"]:focus { outline: none; border-color: #00c8ff; box-shadow: 0 0 0 2px rgba(0, 200, 255, 0.1); }
 
-    .btn-secondary:hover:not(:disabled) {
-      background: linear-gradient(135deg, #252d4a 0%, #303a5f 100%) !important;
-      border-color: rgba(0, 200, 255, 0.3) !important;
-      box-shadow: 0 8px 30px rgba(0, 200, 255, 0.1) !important;
-    }
+    .checkbox-group { display: flex; gap: 10px; align-items: flex-start; font-size: 0.8rem; color: #94a3b8; }
+    .checkbox-group input { margin-top: 3px; accent-color: #00c8ff; }
 
-    /* Scrollbar personnalisée */
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #05070f; }
-    ::-webkit-scrollbar-thumb {
-      background: linear-gradient(180deg, #00c8ff, #7b2ff7);
-      border-radius: 3px;
+    .btn-submit {
+      background: linear-gradient(135deg, #00c8ff 0%, #7b2ff7 100%);
+      color: #ffffff; border: none; padding: 15px; border-radius: 8px;
+      font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 1px;
+      transition: all 0.3s ease;
     }
+    .btn-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0, 200, 255, 0.3); }
+    .btn-submit:disabled { background: #1e2532; color: #4a5568; cursor: not-allowed; }
+
+    .result-box { display: none; padding: 20px; background: rgba(0, 200, 255, 0.05); border: 1px solid #00c8ff; border-radius: 8px; margin-top: 10px; text-align: center; }
+    .result-box.show { display: block; }
+    .code-display { font-size: 2.5rem; font-weight: bold; color: #00e5ff; letter-spacing: 8px; margin: 15px 0; font-family: monospace; }
+    
+    .error-msg { display: none; color: #ff006e; font-size: 0.85rem; padding: 10px; background: rgba(255, 0, 110, 0.1); border-radius: 6px; border: 1px solid #ff006e; margin-top: 5px; }
+    .error-msg.show { display: block; }
+    .info-msg { display: none; color: #00c8ff; font-size: 0.85rem; padding: 10px; background: rgba(0, 200, 255, 0.1); border-radius: 6px; border: 1px solid #00c8ff; margin-top: 5px; }
+    .info-msg.show { display: block; }
+
+    .action-buttons { display: flex; gap: 10px; margin-top: 15px; }
+    .action-buttons button { flex: 1; padding: 10px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; }
+    .btn-check { background: #1e2532; color: #e2e8f0; }
+    .btn-check:hover { background: #2d3748; }
+    .btn-disconnect { background: #ff006e; color: #fff; }
+    .btn-disconnect:hover { background: #dc2626; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>⚡ HEXTECH</h1>
-    <p class="subtitle">Couplage sécurisé de votre bot personnel</p>
 
-    <label for="phone">📱 Votre numéro WhatsApp</label>
-    <input type="tel" id="phone" placeholder="243XXXXXXXXX" maxlength="15" pattern="[0-9]+" autocomplete="off">
-    <p style="font-size: 0.75em; color: #4a5a7a; margin-top: 6px; letter-spacing: 0.5px;">
-      Format international sans le "+" (ex: 243983205767)
-    </p>
+  <div class="dashboard">
+    
+    <header class="header">
+      <div>
+        <h1>HEXTECH <span>👋</span></h1>
+        <p>Vérifiez l'état des serveurs et générez votre code de couplage.</p>
+      </div>
+      <div class="stats-container">
+        <div class="stat-card">
+          <div class="stat-icon" style="color:#00c8ff">🖥️</div>
+          <div class="stat-info">
+            <span class="stat-value" id="activeServers">-</span>
+            <span class="stat-label">Serveurs actifs</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="color:#00ff80">👥</div>
+          <div class="stat-info">
+            <span class="stat-value" id="totalUsers">-</span>
+            <span class="stat-label">Utilisateurs liés</span>
+          </div>
+        </div>
+      </div>
+    </header>
 
-    <div class="checkbox-group">
-      <input type="checkbox" id="consent">
-      <label for="consent">
-        
-      Je peux me déconnecter à tout moment depuis ce site
-      </label>
-    </div>
+    <section class="servers-grid" id="serversGrid">
+      <!-- Cartes injectées dynamiquement -->
+    </section>
 
-    <button id="pairBtn" disabled>🔗 Générer mon code de couplage</button>
+    <section class="bottom-section">
+      <div class="panel">
+        <div class="panel-title">
+          Utilisation des ressources (Tous les serveurs)
+          <div class="panel-legend">
+            <span class="legend-item"><span class="dot dot-blue"></span> CPU</span>
+            <span class="legend-item"><span class="dot dot-purple"></span> RAM</span>
+          </div>
+        </div>
+        <div class="chart-container" id="chartContainer"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Activité récente</div>
+        <div class="activity-list" id="activityList">
+          <div class="activity-item"><div class="activity-dot"></div><span class="activity-text">En attente...</span><span class="activity-time">-</span></div>
+        </div>
+      </div>
+    </section>
 
-    <div class="error" id="error"></div>
-    <div class="info-box" id="info" style="display:none;"></div>
-
-    <div class="result" id="result">
-      <h3>Code de couplage généré</h3>
-      <div class="code-box" id="codeBox">---</div>
-
-      <div class="instructions">
-        <strong>📖 Étapes :</strong>
-        <ol>
-          <li>Ouvre WhatsApp sur ce téléphone</li>
-          <li>Va dans <strong>Paramètres → Appareils liés</strong></li>
-          <li>Clique sur <strong>Lier un appareil</strong></li>
-          <li>Choisis <strong>Lier avec un numéro de téléphone</strong></li>
-          <li>Entre le code ci-dessus</li>
-          <li>Attends la connexion (30 secondes max)</li>
-        </ol>
+    <section class="form-panel" id="formPanel" style="display: none;">
+      <h2>🔗 Couplage sur le <span id="selectedServerName">-</span></h2>
+      <p>Entrez votre numéro WhatsApp pour recevoir le code de couplage.</p>
+      
+      <input type="tel" id="phone" placeholder="243XXXXXXXXX" maxlength="15" pattern="[0-9]+">
+      
+      <div class="checkbox-group">
+        <input type="checkbox" id="consent">
+        <label for="consent">Je consens à coupler mon numéro. Je comprends que mon numéro peut être banni et que je peux me déconnecter à tout moment.</label>
       </div>
 
-      <div class="actions">
-        <button class="btn-secondary" onclick="checkStatus()">🔄 Vérifier statut</button>
-        <button class="btn-danger" onclick="disconnect()">🚪 Déconnecter</button>
-      </div>
-    </div>
+      <button class="btn-submit" id="pairBtn" disabled>Générer le code de couplage</button>
+      
+      <div class="error-msg" id="errorMsg"></div>
+      <div class="info-msg" id="infoMsg"></div>
 
-    <div class="footer">
-      HEXTECH V3 • Service privé • 10 utilisateurs maximum
-    </div>
+      <div class="result-box" id="resultBox">
+        <div style="font-size: 0.9rem; color: #00c8ff; text-transform: uppercase; letter-spacing: 2px;">Votre code de couplage</div>
+        <div class="code-display" id="codeDisplay">---</div>
+        <p style="font-size: 0.8rem; color: #64748b; line-height: 1.6;">
+          1. Ouvrez WhatsApp <br> 2. Paramètres → Appareils liés <br> 3. Lier un appareil → Lier avec un numéro <br> 4. Entrez le code ci-dessus
+        </p>
+        <div class="action-buttons">
+          <button class="btn-check" onclick="checkStatus()">🔄 Vérifier statut</button>
+          <button class="btn-disconnect" onclick="disconnect()">🚪 Déconnecter</button>
+        </div>
+      </div>
+    </section>
+
   </div>
 
   <script>
-    // ⚠️ ADRESSE DU SERVEUR RENDER (à remplacer par la vraie URL)
+    // ⚠️ URL DE TON SERVEUR RENDER
     const API_URL = 'https://last-judment.onrender.com';
 
     let currentPhone = null;
-    let currentCode = null;
+    let selectedServerId = null;
+    let serversCache = [];
+
+    const serversGrid = document.getElementById('serversGrid');
+    const formPanel = document.getElementById('formPanel');
+    const selectedServerName = document.getElementById('selectedServerName');
     const phoneInput = document.getElementById('phone');
     const consentCheck = document.getElementById('consent');
     const pairBtn = document.getElementById('pairBtn');
-    const resultDiv = document.getElementById('result');
-    const codeBox = document.getElementById('codeBox');
-    const errorDiv = document.getElementById('error');
-    const infoDiv = document.getElementById('info');
+    const errorMsg = document.getElementById('errorMsg');
+    const infoMsg = document.getElementById('infoMsg');
+    const resultBox = document.getElementById('resultBox');
+    const codeDisplay = document.getElementById('codeDisplay');
 
-    function showError(msg) {
-      errorDiv.textContent = '❌ ' + msg;
-      errorDiv.classList.add('show');
-      infoDiv.style.display = 'none';
+    // ==================== CHARGEMENT RÉEL DES SERVEURS ====================
+    async function loadServers() {
+      try {
+        const res = await fetch(`${API_URL}/api/servers`);
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || 'Erreur chargement serveurs');
+        
+        serversCache = data.servers;
+        renderServers(data.servers);
+        
+        // Stats globales
+        document.getElementById('activeServers').textContent = data.servers.filter(s => s.online).length;
+        document.getElementById('totalUsers').textContent = data.servers.reduce((sum, s) => sum + s.current, 0);
+        
+        // Graphique réel
+        renderChart(data.servers);
+        
+        // Activité
+        renderActivity(data.servers);
+        
+      } catch (e) {
+        console.error('Erreur:', e.message);
+        serversGrid.innerHTML = `<div class="server-card"><div class="card-header"><div class="server-title">❌ Impossible de charger les serveurs</div></div><div class="card-body"><p style="color:#64748b;font-size:0.85rem;">${e.message}</p></div></div>`;
+      }
     }
 
-    function showInfo(msg) {
-      infoDiv.textContent = 'ℹ️ ' + msg;
-      infoDiv.style.display = 'block';
-      errorDiv.classList.remove('show');
+    // ==================== RENDU DES CARTES SERVEUR ====================
+    function renderServers(servers) {
+      serversGrid.innerHTML = '';
+
+      servers.forEach(srv => {
+        const isFull = srv.current >= srv.max;
+        const isOffline = !srv.online;
+        
+        let cardClass = '';
+        let badgeClass = '';
+        let badgeText = '';
+        
+        if (isOffline) { cardClass = 'offline'; badgeClass = 'offline'; badgeText = 'Hors ligne'; }
+        else if (isFull) { cardClass = 'full'; badgeClass = 'full'; badgeText = 'Complet'; }
+        else { badgeClass = 'online'; badgeText = 'En ligne'; }
+
+        const usagePercent = (srv.current / srv.max) * 100;
+        const cpuPercent = srv.cpu || 0;
+        const ramPercent = srv.ram || 0;
+        
+        // Icône selon l'ID
+        let icon = '🌐';
+        let iconClass = 'icon-web';
+        if (srv.id === 2) { icon = '🗄️'; iconClass = 'icon-db'; }
+        else if (srv.id === 3) { icon = '🎮'; iconClass = 'icon-game'; }
+        else if (srv.id === 4) { icon = '📱'; iconClass = 'icon-app'; }
+
+        const card = document.createElement('div');
+        card.className = `server-card ${cardClass}`;
+        card.dataset.serverId = srv.id;
+        
+        if (selectedServerId === srv.id) card.classList.add('selected');
+        
+        card.innerHTML = `
+          <div class="card-header">
+            <div class="server-title">
+              <div class="server-icon ${iconClass}">${icon}</div>
+              ${srv.name}
+            </div>
+            <div class="status-badge ${badgeClass}">${badgeText}</div>
+          </div>
+          
+          <div class="card-body">
+            <div>
+              <div class="metric-row"><span>Utilisateurs</span><span>${srv.current}/${srv.max}</span></div>
+              <div class="progress-bar"><div class="progress-fill fill-blue" style="width: ${usagePercent}%"></div></div>
+            </div>
+            <div>
+              <div class="metric-row"><span>CPU</span><span>${cpuPercent}%</span></div>
+              <div class="progress-bar"><div class="progress-fill fill-green" style="width: ${cpuPercent}%"></div></div>
+            </div>
+            <div>
+              <div class="metric-row"><span>RAM</span><span>${ramPercent}%</span></div>
+              <div class="progress-bar"><div class="progress-fill fill-purple" style="width: ${ramPercent}%"></div></div>
+            </div>
+          </div>
+
+          <div class="card-footer">
+            <div class="uptime">${srv.uptime || 'Actif'}</div>
+            <button class="btn-select" ${isOffline || isFull ? 'disabled' : ''} data-server-id="${srv.id}" data-server-name="${srv.name}">
+              ${isOffline || isFull ? 'Indisponible' : 'Sélectionner'}
+            </button>
+          </div>
+        `;
+        serversGrid.appendChild(card);
+      });
+      
+      // Attacher les événements de sélection
+      document.querySelectorAll('.btn-select').forEach(btn => {
+        if (!btn.disabled) {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectServer(parseInt(btn.dataset.serverId), btn.dataset.serverName);
+          });
+        }
+      });
     }
 
+    // ==================== GRAPHIQUE RÉEL ====================
+    function renderChart(servers) {
+      const chart = document.getElementById('chartContainer');
+      chart.innerHTML = '';
+      
+      // Pour chaque serveur, afficher une barre qui représente l'utilisation
+      servers.forEach((srv, i) => {
+        const usage = (srv.current / srv.max) * 100;
+        const bar = document.createElement('div');
+        bar.className = 'chart-bar';
+        bar.style.height = `${Math.max(usage, 10)}%`;
+        bar.style.opacity = 0.4 + (usage / 200);
+        bar.title = `${srv.name}: ${srv.current}/${srv.max} utilisateurs`;
+        chart.appendChild(bar);
+      });
+      
+      // Compléter avec quelques barres pour l'esthétique
+      for (let i = servers.length; i < 20; i++) {
+        const bar = document.createElement('div');
+        bar.className = 'chart-bar';
+        bar.style.height = '5%';
+        bar.style.opacity = 0.15;
+        chart.appendChild(bar);
+      }
+    }
+
+    // ==================== ACTIVITÉ RÉELLE ====================
+    function renderActivity(servers) {
+      const list = document.getElementById('activityList');
+      list.innerHTML = '';
+      
+      servers.forEach(srv => {
+        const item = document.createElement('div');
+        item.className = 'activity-item';
+        
+        const dotColor = !srv.online ? '#64748b' : (srv.current >= srv.max ? '#ff006e' : '#00ff80');
+        const statusText = !srv.online ? 'Hors ligne' : (srv.current >= srv.max ? 'Complet' : `${srv.current}/${srv.max} utilisateurs`);
+        
+        item.innerHTML = `
+          <div class="activity-dot" style="background:${dotColor}"></div>
+          <span class="activity-text">${srv.name}</span>
+          <span class="activity-time">${statusText}</span>
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    // ==================== SÉLECTION SERVEUR ====================
+    function selectServer(id, name) {
+      selectedServerId = id;
+      selectedServerName.textContent = name;
+      
+      // Mettre à jour l'apparence
+      document.querySelectorAll('.server-card').forEach(card => {
+        card.classList.remove('selected');
+        if (parseInt(card.dataset.serverId) === id) {
+          card.classList.add('selected');
+        }
+      });
+      
+      document.querySelectorAll('.btn-select').forEach(btn => {
+        btn.classList.remove('selected');
+        if (parseInt(btn.dataset.serverId) === id) {
+          btn.classList.add('selected');
+          btn.textContent = 'Sélectionné';
+        } else if (!btn.disabled) {
+          btn.textContent = 'Sélectionner';
+        }
+      });
+      
+      // Afficher le formulaire
+      formPanel.style.display = 'flex';
+      formPanel.scrollIntoView({ behavior: 'smooth' });
+      
+      // Réinitialiser le formulaire
+      resultBox.classList.remove('show');
+      errorMsg.classList.remove('show');
+      infoMsg.classList.remove('show');
+      phoneInput.value = '';
+      consentCheck.checked = false;
+      updateBtn();
+    }
+
+    // ==================== VALIDATION FORMULAIRE ====================
     function updateBtn() {
       const phone = phoneInput.value.replace(/\D/g, '');
-      pairBtn.disabled = !(phone.length >= 9 && consentCheck.checked);
+      pairBtn.disabled = !(phone.length >= 9 && consentCheck.checked && selectedServerId !== null);
     }
-
     phoneInput.addEventListener('input', updateBtn);
     consentCheck.addEventListener('change', updateBtn);
 
+    // ==================== GÉNÉRATION DU CODE (RÉEL) ====================
     pairBtn.addEventListener('click', async () => {
       const phone = phoneInput.value.replace(/\D/g, '');
+      if (!selectedServerId) return showError('Veuillez sélectionner un serveur.');
 
       pairBtn.disabled = true;
       pairBtn.textContent = '⏳ Génération en cours...';
-      errorDiv.classList.remove('show');
-      resultDiv.classList.remove('show');
+      errorMsg.classList.remove('show');
+      resultBox.classList.remove('show');
 
       try {
         const res = await fetch(`${API_URL}/api/pair`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, consent: true })
+          body: JSON.stringify({ 
+            phone, 
+            consent: true, 
+            serverId: selectedServerId 
+          })
         });
 
         const data = await res.json();
-
         if (!res.ok) throw new Error(data.error || 'Erreur serveur');
 
         currentPhone = phone;
-        currentCode = data.code;
-
-        codeBox.textContent = data.code;
-        resultDiv.classList.add('show');
+        codeDisplay.textContent = data.code;
+        resultBox.classList.add('show');
         pairBtn.textContent = '✅ Code généré';
         pairBtn.disabled = false;
-
-        // Polling automatique du statut
+        
+        showInfo(`Code généré sur le serveur ${selectedServerId}. Entrez-le dans WhatsApp.`);
+        
+        // Rafraîchir les serveurs (un slot a été pris)
+        setTimeout(loadServers, 2000);
+        
+        // Polling
         pollStatus();
 
       } catch (e) {
         showError(e.message);
-        pairBtn.textContent = '🔗 Générer mon code de couplage';
+        pairBtn.textContent = 'Générer le code de couplage';
         pairBtn.disabled = false;
       }
     });
 
+    // ==================== VÉRIFIER STATUT ====================
     async function checkStatus() {
       if (!currentPhone) return;
       try {
         const res = await fetch(`${API_URL}/api/status/${currentPhone}`);
         const data = await res.json();
-
         if (!res.ok) throw new Error(data.error || 'Erreur');
-
-        if (data.status === 'connected') {
-          showInfo('✅ Votre bot est connecté et actif !');
-        } else if (data.status === 'pending') {
-          showInfo('⏳ En attente de couplage. Entrez le code dans WhatsApp.');
-        } else if (data.status === 'disconnected') {
-          showInfo('⚠️ Bot déconnecté. Générez un nouveau code.');
-        }
-      } catch (e) {
-        showError(e.message);
-      }
+        
+        if (data.status === 'connected') showInfo('✅ Votre bot est connecté et actif !');
+        else if (data.status === 'pending') showInfo('⏳ En attente de couplage. Entrez le code dans WhatsApp.');
+        else if (data.status === 'disconnected') showInfo('⚠️ Bot déconnecté. Générez un nouveau code.');
+      } catch (e) { showError(e.message); }
     }
 
+    // ==================== DÉCONNEXION ====================
     async function disconnect() {
       if (!currentPhone) return;
       if (!confirm('Voulez-vous vraiment déconnecter votre bot ?')) return;
-
       try {
         const res = await fetch(`${API_URL}/api/disconnect/${currentPhone}`, { method: 'POST' });
         const data = await res.json();
-
         if (!res.ok) throw new Error(data.error || 'Erreur');
-
-        showInfo('✅ Bot déconnecté. Vous pouvez en créer un nouveau.');
-        resultDiv.classList.remove('show');
+        showInfo('✅ Bot déconnecté.');
+        resultBox.classList.remove('show');
         currentPhone = null;
-        currentCode = null;
-
-      } catch (e) {
-        showError(e.message);
-      }
+        
+        // Rafraîchir les serveurs
+        setTimeout(loadServers, 2000);
+      } catch (e) { showError(e.message); }
     }
 
+    // ==================== POLLING ====================
     async function pollStatus() {
       if (!currentPhone) return;
       try {
         const res = await fetch(`${API_URL}/api/status/${currentPhone}`);
         const data = await res.json();
-
         if (data.status === 'connected') {
           showInfo('✅ Votre bot est connecté et actif !');
+          loadServers();
           return;
         }
       } catch (e) {}
-
-      // Revérifier dans 10 secondes
       setTimeout(pollStatus, 10000);
     }
+
+    // ==================== UTILITAIRES ====================
+    function showError(msg) { 
+      errorMsg.textContent = '❌ ' + msg; 
+      errorMsg.classList.add('show'); 
+      infoMsg.classList.remove('show'); 
+    }
+    function showInfo(msg) { 
+      infoMsg.textContent = 'ℹ️ ' + msg; 
+      infoMsg.classList.add('show'); 
+      errorMsg.classList.remove('show'); 
+    }
+
+    // ==================== LANCEMENT ====================
+    loadServers();
+    
+    // Rafraîchir l'état des serveurs toutes les 15 secondes
+    setInterval(loadServers, 15000);
   </script>
 </body>
 </html>
