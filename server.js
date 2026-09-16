@@ -11,7 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ==================== CONFIGURATION ====================
-const MAX_USERS_PER_SERVER = 4;
+const MAX_USERS_PER_SERVER = 14;
 const USERS_FILE = './users.json';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
 const ADMIN_KEY = process.env.ADMIN_KEY || 'xenoban-admin-2026';
