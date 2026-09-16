@@ -4,6 +4,7 @@
 // 🆕 ADMIN COMPLET : déconnexion + ban IP + stats pays + clics
 // 🆕 v2 : Exclusions stats internes + Auth disconnect/status
 // 🆕 v3 : Turnstile serveur + Page admin attaques
+// 🆕 v4 : Whitelist IPs Render/worker + Fix NaN + Route GET unban
 
 const express = require('express');
 const cors = require('cors');
@@ -27,7 +28,65 @@ const API_KEY = process.env.HEXTECH_SECRET_KEY || 'change-moi-en-prod-2026';
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s => s.trim());
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true' || true;
 
-// 🆕 CLOUDFLARE TURNSTILE
+// 🆕 WHITELIST D'IPs DE CONFIANCE
+// Ces IPs ne sont JAMAIS bannies, JAMAIS comptées dans les stats, JAMAIS rate-limitées
+// 👉 Ajoute ici toutes les IPs de tes workers Render, ton IP perso, etc.
+const TRUSTED_IPS = [
+  // 📍 IPs locales
+  '127.0.0.1',
+  '::1',
+  'localhost',
+
+  // 📍 IP de ton WORKER (celle qu'on voit dans les logs : 51.75.118.170)
+  '51.75.118.170',
+
+  // 📍 Plages d'IPs Render (Frankfurt - principal)
+  // Ces plages sont utilisées par tous les services Render
+  // ⚠️ Si Render change, ajoute les nouvelles IPs ici
+  // (voir : https://render.com/docs/static-outbound-ip-addresses)
+
+  // 📍 IP de ton site (si différent du master)
+  // Ajoute ici l'IP de ton Worker Cloudflare si tu en as un
+
+  // 📍 Ajoute ici ton IP personnelle (pour ne jamais être banni toi-même)
+  // Pour trouver ton IP : https://whatismyipaddress.com/
+];
+
+// 🆕 Détection automatique des IPs privées/internes
+function isInternalIP(ip) {
+  if (!ip) return false;
+  
+  // IPs locales
+  if (ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') return true;
+  
+  // IPs privées (RFC 1918)
+  if (ip.startsWith('10.')) return true;
+  if (ip.startsWith('192.168.')) return true;
+  
+  // 172.16.0.0 → 172.31.255.255
+  if (ip.startsWith('172.')) {
+    const second = parseInt(ip.split('.')[1]);
+    if (second >= 16 && second <= 31) return true;
+  }
+  
+  // IPs link-local
+  if (ip.startsWith('169.254.')) return true;
+  
+  // IPs Cloudflare (si tu utilises Cloudflare)
+  if (ip.startsWith('172.68.') || ip.startsWith('172.69.') || ip.startsWith('172.70.') || ip.startsWith('172.71.')) return true;
+  
+  return false;
+}
+
+// 🆕 Vérifie si une IP est de confiance
+function isTrustedIP(ip) {
+  if (!ip) return false;
+  if (TRUSTED_IPS.includes(ip)) return true;
+  if (isInternalIP(ip)) return true;
+  return false;
+}
+
+// 🆕 Configuration Turnstile
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '';
 const TURNSTILE_ENABLED = process.env.TURNSTILE_ENABLED !== 'false' && TURNSTILE_SECRET_KEY.length > 0;
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
@@ -38,8 +97,8 @@ const STATS_EXCLUDED_PATHS = [
   '/api/worker/',
   '/api/admin/',
   '/static/',
-  '/admin',        // 🆕 Page admin
-  '/admin.html'    // 🆕 Page admin HTML
+  '/admin',
+  '/admin.html'
 ];
 
 // 🆕 Configuration de l'anti-énumération
@@ -151,7 +210,7 @@ function saveJSON(file, data) {
   }
 }
 
-// ==================== 🔒 ENREGISTREMENT DES IPs (avec stats pays) ====================
+// ==================== 🔒 ENREGISTREMENT DES IPs ====================
 const ipLogs = loadJSON(IP_LOGS_FILE, { logs: [], stats: {}, countries: {} });
 
 if (!ipLogs.countries) ipLogs.countries = {};
@@ -163,7 +222,6 @@ function isAttackLog(log) {
     'curl', 'wget', 'python', 'scrapy', 'postman',
     'insomnia', 'httpie', 'go-http', 'java/', 'okhttp'
   ];
-  // User-agent suspect OU endpoint sensible
   if (suspiciousUAs.some(p => ua.includes(p))) return true;
   if (log.endpoint === '/api/pair' && log.method === 'POST') return true;
   return false;
@@ -176,21 +234,24 @@ function logIP(req, endpoint, extra = {}) {
   const country = req.headers['cf-ipcountry'] || 'unknown';
   const city = req.headers['cf-ipcity'] || null;
 
+  // 🆕 NE PAS logger les IPs de confiance
+  const trusted = isTrustedIP(ip);
+
   const logEntry = {
     ip,
     endpoint,
     method: req.method,
     userAgent: ua,
     timestamp: new Date(now).toISOString(),
-    country,
+    country: trusted ? 'INTERNAL' : country,
     city,
     referer: req.headers['referer'] || null,
     origin: req.headers['origin'] || null,
+    trusted,   // 🆕 Marquer comme IP de confiance
     ...extra
   };
 
-  // 🆕 Marquer les attaques
-  logEntry.isAttack = isAttackLog(logEntry);
+  logEntry.isAttack = !trusted && isAttackLog(logEntry);
 
   ipLogs.logs.push(logEntry);
 
@@ -206,23 +267,25 @@ function logIP(req, endpoint, extra = {}) {
       endpoints: {},
       blocked: false,
       violations: [],
-      country: country,
+      country: trusted ? 'INTERNAL' : country,
       city: city,
-      attacks: 0
+      attacks: 0,
+      trusted   // 🆕
     };
   }
   ipLogs.stats[ip].lastSeen = now;
   ipLogs.stats[ip].count++;
-  ipLogs.stats[ip].country = country || ipLogs.stats[ip].country;
+  ipLogs.stats[ip].country = trusted ? 'INTERNAL' : (country || ipLogs.stats[ip].country);
   ipLogs.stats[ip].city = city || ipLogs.stats[ip].city;
+  ipLogs.stats[ip].trusted = trusted;
   ipLogs.stats[ip].endpoints[endpoint] = (ipLogs.stats[ip].endpoints[endpoint] || 0) + 1;
   if (logEntry.isAttack) {
     ipLogs.stats[ip].attacks = (ipLogs.stats[ip].attacks || 0) + 1;
   }
 
-  // 🆕 Stats par pays
-  if (!ipLogs.countries[country]) {
-    ipLogs.countries[country] = {
+  // 🆕 Stats par pays (n'exclut pas INTERNAL pour info)
+  if (!ipLogs.countries[logEntry.country]) {
+    ipLogs.countries[logEntry.country] = {
       count: 0,
       uniqueIPs: {},
       endpoints: {},
@@ -231,12 +294,12 @@ function logIP(req, endpoint, extra = {}) {
       lastSeen: now
     };
   }
-  ipLogs.countries[country].count++;
-  ipLogs.countries[country].lastSeen = now;
-  ipLogs.countries[country].uniqueIPs[ip] = (ipLogs.countries[country].uniqueIPs[ip] || 0) + 1;
-  ipLogs.countries[country].endpoints[endpoint] = (ipLogs.countries[country].endpoints[endpoint] || 0) + 1;
+  ipLogs.countries[logEntry.country].count++;
+  ipLogs.countries[logEntry.country].lastSeen = now;
+  ipLogs.countries[logEntry.country].uniqueIPs[ip] = (ipLogs.countries[logEntry.country].uniqueIPs[ip] || 0) + 1;
+  ipLogs.countries[logEntry.country].endpoints[endpoint] = (ipLogs.countries[logEntry.country].endpoints[endpoint] || 0) + 1;
   if (logEntry.isAttack) {
-    ipLogs.countries[country].attacks = (ipLogs.countries[country].attacks || 0) + 1;
+    ipLogs.countries[logEntry.country].attacks = (ipLogs.countries[logEntry.country].attacks || 0) + 1;
   }
 
   scheduleSaveIPLogs();
@@ -259,6 +322,9 @@ process.on('SIGTERM', () => {
 const blacklist = loadJSON(BLACKLIST_FILE, { ips: {}, violations: {} });
 
 function isBlacklisted(ip) {
+  // 🆕 Les IPs de confiance ne sont JAMAIS bannies
+  if (isTrustedIP(ip)) return false;
+
   const entry = blacklist.ips[ip];
   if (!entry) return false;
   if (entry.bannedUntil === 'permanent') return true;
@@ -271,6 +337,12 @@ function isBlacklisted(ip) {
 }
 
 function recordViolation(ip, reason) {
+  // 🆕 Les IPs de confiance ne génèrent JAMAIS de violation
+  if (isTrustedIP(ip)) {
+    console.log(`✅ [TRUSTED] Violation ignorée pour ${ip} (${reason})`);
+    return;
+  }
+
   const now = Date.now();
   if (!blacklist.violations[ip]) {
     blacklist.violations[ip] = [];
@@ -288,7 +360,8 @@ function recordViolation(ip, reason) {
       reason: `Trop de violations: ${reason}`,
       bannedAt: now
     };
-    console.warn(`🚫 IP BANNIE: ${ip} pour ${BAN_CONFIG.binDurationMs / 1000 / 60} minutes`);
+    // 🐛 FIX : binDurationMs → banDurationMs
+    console.warn(`🚫 IP BANNIE: ${ip} pour ${BAN_CONFIG.banDurationMs / 1000 / 60} minutes`);
     saveJSON(BLACKLIST_FILE, blacklist);
   }
 }
@@ -299,6 +372,11 @@ const rateLimitStore = new Map();
 function rateLimit(config, endpointName) {
   return (req, res, next) => {
     const ip = getClientIP(req);
+
+    // 🆕 Les IPs de confiance ne sont JAMAIS rate-limitées
+    if (isTrustedIP(ip)) {
+      return next();
+    }
 
     if (isBlacklisted(ip)) {
       return res.status(403).json({ error: 'Accès refusé (IP bannie)' });
@@ -368,8 +446,16 @@ function isAdminAuthorized(req) {
 }
 
 function requireAdmin(req, res, next) {
+  // 🆕 Accepter les IPs de confiance avec header worker-id (communication worker → master)
+  const ip = getClientIP(req);
+  const workerId = req.headers['x-worker-id'];
+  
+  if (workerId && isTrustedIP(ip)) {
+    // Le worker envoie son ID et vient d'une IP de confiance → OK
+    return next();
+  }
+
   if (!isAdminAuthorized(req)) {
-    const ip = getClientIP(req);
     recordViolation(ip, 'unauthorized-admin');
     console.warn(`🚫 Admin refusé depuis ${ip} (${req.path})`);
     return res.status(401).json({ error: 'Non autorisé' });
@@ -378,16 +464,19 @@ function requireAdmin(req, res, next) {
 }
 
 // ==================== 🆕 VÉRIFICATION CLOUDFLARE TURNSTILE ====================
-// Vérifie le token Turnstile envoyé par le client auprès de Cloudflare
-// → Bloque les fake-sites qui n'ont pas la bonne clé Turnstile
 async function verifyTurnstile(req, res, next) {
-  // Si Turnstile désactivé (dev), passer
   if (!TURNSTILE_ENABLED) {
     console.warn('⚠️ Turnstile désactivé (TURNSTILE_ENABLED=false)');
     return next();
   }
 
-  // Récupérer le token depuis header, body, ou query
+  // 🆕 Les IPs de confiance bypass Turnstile
+  const ip = getClientIP(req);
+  if (isTrustedIP(ip)) {
+    console.log(`✅ [TRUSTED] Turnstile bypass pour ${ip}`);
+    return next();
+  }
+
   const token =
     req.headers['cf-turnstile-response'] ||
     req.body?.turnstileToken ||
@@ -395,7 +484,6 @@ async function verifyTurnstile(req, res, next) {
     req.query?.turnstileToken;
 
   if (!token) {
-    const ip = getClientIP(req);
     recordViolation(ip, 'missing-turnstile-token');
     console.warn(`🚫 Turnstile token manquant depuis ${ip}`);
     return res.status(403).json({
@@ -404,21 +492,19 @@ async function verifyTurnstile(req, res, next) {
   }
 
   try {
-    // Vérifier le token auprès de Cloudflare
     const verifyRes = await fetch(TURNSTILE_VERIFY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         secret: TURNSTILE_SECRET_KEY,
         response: token,
-        remoteip: getClientIP(req)
+        remoteip: ip
       })
     });
 
     const result = await verifyRes.json();
 
     if (!result.success) {
-      const ip = getClientIP(req);
       recordViolation(ip, 'turnstile-failed');
       console.warn(`🚫 Turnstile échoué depuis ${ip}:`, result['error-codes']);
       return res.status(403).json({
@@ -426,7 +512,6 @@ async function verifyTurnstile(req, res, next) {
       });
     }
 
-    // ✅ Token valide
     req.turnstileVerified = true;
     next();
 
@@ -444,13 +529,17 @@ const SUSPICIOUS_UA = [
 ];
 
 function detectSuspiciousClient(req, res, next) {
+  const ip = getClientIP(req);
+
+  // 🆕 Les IPs de confiance bypass la détection
+  if (isTrustedIP(ip)) return next();
+
   const ua = req.headers['user-agent'] || '';
   const isSuspicious = SUSPICIOUS_UA.some(pattern => pattern.test(ua));
 
   if (isSuspicious && process.env.ALLOW_SUSPICIOUS_UA !== 'true') {
     if (isAdminAuthorized(req)) return next();
 
-    const ip = getClientIP(req);
     recordViolation(ip, 'suspicious-ua');
     console.warn(`🚫 User-Agent suspect bloqué: ${ip} → ${ua}`);
     return res.status(403).json({ error: 'Accès refusé' });
@@ -492,6 +581,10 @@ const enumerationTracker = new Map();
 
 function antiEnumeration(req, res, next) {
   const ip = getClientIP(req);
+
+  // 🆕 Les IPs de confiance bypass
+  if (isTrustedIP(ip)) return next();
+
   const phone = req.params.phone;
   const now = Date.now();
 
@@ -546,7 +639,7 @@ app.use(cors({
     return callback(new Error('CORS non autorisé'));
   },
   methods: ['GET', 'POST', 'OPTIONS', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'X-API-KEY', 'X-ADMIN-KEY', 'X-Session-Token', 'CF-Turnstile-Response'],
+  allowedHeaders: ['Content-Type', 'X-API-KEY', 'X-ADMIN-KEY', 'X-Session-Token', 'X-Worker-Id', 'CF-Turnstile-Response'],
   credentials: false,
   maxAge: 86400
 }));
@@ -557,8 +650,12 @@ app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
 // ==================== 🆕 MIDDLEWARE GLOBAL : LOG INTELLIGENT ====================
 app.use((req, res, next) => {
+  // 🆕 Ne PAS logger : health, worker, admin, static, ET IPs de confiance
   if (!isExcludedFromStats(req.path)) {
-    logIP(req, req.path);
+    const ip = getClientIP(req);
+    if (!isTrustedIP(ip)) {
+      logIP(req, req.path);
+    }
   }
   next();
 });
@@ -619,6 +716,7 @@ app.get('/health', (req, res) => {
     status: 'ok',
     uptime: Math.floor(process.uptime()),
     ip: getClientIP(req),
+    trusted: isTrustedIP(getClientIP(req)),
     turnstileEnabled: TURNSTILE_ENABLED
   });
 });
@@ -662,10 +760,10 @@ app.get('/api/servers', (req, res) => {
   res.json({ servers: serversStatus });
 });
 
-// ==================== 🆕 ROUTE : PAIRING (avec Turnstile) ====================
+// ==================== ROUTE : PAIRING ====================
 app.post('/api/pair',
   rateLimit(RATE_LIMIT.pair, 'pair'),
-  verifyTurnstile,              // 🆕 Vérification Cloudflare
+  verifyTurnstile,
   async (req, res) => {
     const { phone, consent, serverId } = req.body;
     const clientIP = getClientIP(req);
@@ -771,7 +869,7 @@ app.post('/api/pair',
   }
 );
 
-// ==================== 🆕 ROUTE : STATUT ====================
+// ==================== ROUTE : STATUT ====================
 app.get('/api/status/:phone',
   rateLimit(RATE_LIMIT.status, 'status'),
   antiEnumeration,
@@ -791,7 +889,7 @@ app.get('/api/status/:phone',
   }
 );
 
-// ==================== 🆕 ROUTE : DÉCONNEXION ====================
+// ==================== ROUTE : DÉCONNEXION ====================
 app.post('/api/disconnect/:phone',
   rateLimit(RATE_LIMIT.disconnect, 'disconnect'),
   requireSessionToken,
@@ -915,7 +1013,9 @@ app.post('/api/worker/:serverId/stats', requireAdmin, (req, res) => {
 
 app.get('/api/admin/top-ips', requireAdmin, (req, res) => {
   const limit = parseInt(req.query.limit) || 20;
+  // 🆕 Exclure les IPs de confiance des stats
   const sorted = Object.entries(ipLogs.stats)
+    .filter(([ip]) => !isTrustedIP(ip))
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, limit)
     .map(([ip, stats]) => ({
@@ -925,7 +1025,7 @@ app.get('/api/admin/top-ips', requireAdmin, (req, res) => {
       lastSeenFormatted: new Date(stats.lastSeen).toISOString()
     }));
 
-  res.json({ total: Object.keys(ipLogs.stats).length, top: sorted });
+  res.json({ total: sorted.length, top: sorted });
 });
 
 app.get('/api/admin/ip-stats/:ip', requireAdmin, (req, res) => {
@@ -945,6 +1045,7 @@ app.get('/api/admin/ip-stats/:ip', requireAdmin, (req, res) => {
 
   res.json({
     ip,
+    trusted: isTrustedIP(ip),
     stats: stats ? {
       ...stats,
       firstSeenFormatted: new Date(stats.firstSeen).toISOString(),
@@ -965,6 +1066,12 @@ app.get('/api/admin/blacklist', requireAdmin, (req, res) => {
 
 app.post('/api/admin/ban/:ip', requireAdmin, (req, res) => {
   const ip = req.params.ip;
+
+  // 🆕 Refuser de bannir une IP de confiance
+  if (isTrustedIP(ip)) {
+    return res.status(400).json({ error: 'Impossible de bannir une IP de confiance' });
+  }
+
   const duration = req.body?.duration;
   const reason = req.body?.reason || 'Ban manuel admin';
 
@@ -987,6 +1094,7 @@ app.post('/api/admin/ban/:ip', requireAdmin, (req, res) => {
   res.json({ success: true, ip, bannedUntil, reason });
 });
 
+// 🆕 POST unban
 app.post('/api/admin/unban/:ip', requireAdmin, (req, res) => {
   const ip = req.params.ip;
   delete blacklist.ips[ip];
@@ -996,14 +1104,26 @@ app.post('/api/admin/unban/:ip', requireAdmin, (req, res) => {
   res.json({ success: true, ip });
 });
 
+// 🆕 GET unban (accessible navigateur)
+app.get('/api/admin/unban/:ip', requireAdmin, (req, res) => {
+  const ip = req.params.ip;
+  delete blacklist.ips[ip];
+  delete blacklist.violations[ip];
+  saveJSON(BLACKLIST_FILE, blacklist);
+  console.log(`✅ Unban (GET): ${ip}`);
+  res.json({ success: true, ip, message: 'IP débannie' });
+});
+
 app.get('/api/admin/logs', requireAdmin, (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 100, 1000);
   const endpoint = req.query.endpoint;
   const country = req.query.country;
   const ip = req.query.ip;
   const attacksOnly = req.query.attacks === 'true';
+  const excludeTrusted = req.query.excludeTrusted !== 'false';
 
   let logs = ipLogs.logs;
+  if (excludeTrusted) logs = logs.filter(l => !l.trusted);
   if (endpoint) logs = logs.filter(l => l.endpoint === endpoint);
   if (country) logs = logs.filter(l => l.country === country);
   if (ip) logs = logs.filter(l => l.ip === ip);
@@ -1017,6 +1137,7 @@ app.get('/api/admin/logs', requireAdmin, (req, res) => {
 
 app.get('/api/admin/countries', requireAdmin, (req, res) => {
   const countries = Object.entries(ipLogs.countries || {})
+    .filter(([code]) => code !== 'INTERNAL')
     .map(([code, data]) => ({
       code,
       count: data.count,
@@ -1039,7 +1160,7 @@ app.get('/api/admin/countries', requireAdmin, (req, res) => {
 app.get('/api/admin/endpoints', requireAdmin, (req, res) => {
   const endpoints = {};
   
-  ipLogs.logs.forEach(log => {
+  ipLogs.logs.filter(l => !l.trusted).forEach(log => {
     if (!endpoints[log.endpoint]) {
       endpoints[log.endpoint] = {
         count: 0,
@@ -1141,27 +1262,29 @@ app.get('/api/admin/overview', requireAdmin, (req, res) => {
   const connectedUsers = Object.values(users).filter(u => u.status === 'connected').length;
   const pendingUsers = Object.values(users).filter(u => u.status === 'pending').length;
   const bannedIPs = Object.keys(blacklist.ips).length;
-  const totalIPs = Object.keys(ipLogs.stats).length;
-  const totalLogs = ipLogs.logs.length;
-  const totalCountries = Object.keys(ipLogs.countries || {}).length;
+  
+  // 🆕 Exclure les IPs de confiance des stats
+  const externalIPs = Object.keys(ipLogs.stats).filter(ip => !isTrustedIP(ip));
+  const totalIPs = externalIPs.length;
+  const totalLogs = ipLogs.logs.filter(l => !l.trusted).length;
+  const totalCountries = Object.keys(ipLogs.countries || {}).filter(c => c !== 'INTERNAL').length;
 
   const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-  const recentLogs = ipLogs.logs.filter(l => new Date(l.timestamp).getTime() > oneDayAgo);
+  const recentLogs = ipLogs.logs.filter(l => !l.trusted && new Date(l.timestamp).getTime() > oneDayAgo);
   const recentUniqueIPs = new Set(recentLogs.map(l => l.ip)).size;
 
   const botAttempts = ipLogs.logs.filter(l => {
+    if (l.trusted) return false;
     const ua = (l.userAgent || '').toLowerCase();
     return SUSPICIOUS_UA.some(p => p.test(ua));
   }).length;
 
-  // 🆕 Attaques des 5 dernières minutes
   const fiveMinAgo = Date.now() - 5 * 60 * 1000;
   const recentAttacks = ipLogs.logs.filter(l =>
-    l.isAttack === true && new Date(l.timestamp).getTime() > fiveMinAgo
+    l.isAttack === true && !l.trusted && new Date(l.timestamp).getTime() > fiveMinAgo
   ).length;
 
-  // 🆕 Nombre total d'attaques
-  const totalAttacks = ipLogs.logs.filter(l => l.isAttack === true).length;
+  const totalAttacks = ipLogs.logs.filter(l => l.isAttack === true && !l.trusted).length;
 
   res.json({
     totalUsers,
@@ -1173,10 +1296,11 @@ app.get('/api/admin/overview', requireAdmin, (req, res) => {
     totalCountries,
     recentUniqueIPs,
     botAttempts,
-    recentAttacks,        // 🆕
-    totalAttacks,         // 🆕
+    recentAttacks,
+    totalAttacks,
+    trustedIPs: TRUSTED_IPS.length,   // 🆕
     uptime: Math.floor(process.uptime()),
-    turnstileEnabled: TURNSTILE_ENABLED,   // 🆕
+    turnstileEnabled: TURNSTILE_ENABLED,
     servers: SERVERS.map(s => ({
       id: s.id,
       name: s.name,
@@ -1187,17 +1311,16 @@ app.get('/api/admin/overview', requireAdmin, (req, res) => {
   });
 });
 
-// ==================== 🆕 ROUTE API : ATTAQUES EN COURS ====================
+// ==================== ROUTE API : ATTAQUES ====================
 app.get('/api/admin/attacks', requireAdmin, (req, res) => {
   const minutes = parseInt(req.query.minutes) || 5;
   const since = Date.now() - minutes * 60 * 1000;
 
   const attacks = ipLogs.logs
-    .filter(l => l.isAttack === true && new Date(l.timestamp).getTime() > since)
+    .filter(l => l.isAttack === true && !l.trusted && new Date(l.timestamp).getTime() > since)
     .slice(-200)
     .reverse();
 
-  // Grouper par IP
   const byIP = {};
   attacks.forEach(a => {
     if (!byIP[a.ip]) {
@@ -1228,13 +1351,36 @@ app.get('/api/admin/attacks', requireAdmin, (req, res) => {
   });
 });
 
-// ==================== PAGE ADMIN HTML COMPLÈTE ====================
+// ==================== ROUTE : VOIR WHITELIST ====================
+app.get('/api/admin/trusted-ips', requireAdmin, (req, res) => {
+  res.json({
+    total: TRUSTED_IPS.length,
+    trustedIPs: TRUSTED_IPS
+  });
+});
+
+// ==================== ROUTE : AJOUTER IP DE CONFIANCE ====================
+app.post('/api/admin/trusted-ips', requireAdmin, (req, res) => {
+  const { ip } = req.body;
+  if (!ip || typeof ip !== 'string') {
+    return res.status(400).json({ error: 'IP requise' });
+  }
+  if (TRUSTED_IPS.includes(ip)) {
+    return res.status(409).json({ error: 'IP déjà dans la whitelist' });
+  }
+  TRUSTED_IPS.push(ip);
+  // Note: en mémoire seulement. Pour persister, il faut écrire dans un fichier.
+  console.log(`✅ IP ajoutée à la whitelist: ${ip}`);
+  res.json({ success: true, ip, total: TRUSTED_IPS.length });
+});
+
+// ==================== PAGE ADMIN HTML ====================
 app.get('/admin', (req, res) => {
   if (!isAdminAuthorized(req)) {
     return res.status(401).send(`
       <html><body style="background:#0a0e1a;color:#fff;font-family:sans-serif;padding:40px;text-align:center;">
-        <h1>🔒 JE T'AI EU PAUVRE CON 🙃</h1>
-        <p>AMATEUR, MAINTENANT ÉCOUTE MOI BIEN TU VAS T'ABONNER À CE PUTAIN DE CANAL TOUT DE SUITE T.me/hextechcar 🔥</p>
+        <h1>🔒 JE T'AI EU 🙃</h1>
+        <p>PAUVRE AMATEUR, MAINTENANT ABONNE-TOI DANS MON PUTAIN DE CANAL T.me/hextechcar 🔥</p>
       </body></html>
     `);
   }
@@ -1262,6 +1408,8 @@ app.get('/admin', (req, res) => {
   .card.success .value { color:#00ff80; }
   .card.attack { background:linear-gradient(135deg,rgba(255,0,110,0.1),rgba(255,0,110,0.05)); border-color:rgba(255,0,110,0.3); }
   .card.attack .value { color:#ff006e; }
+  .card.trusted { background:linear-gradient(135deg,rgba(0,255,128,0.1),rgba(0,255,128,0.05)); border-color:rgba(0,255,128,0.3); }
+  .card.trusted .value { color:#00ff80; }
   .panel { background:#0f131a; border:1px solid #1e2532; border-radius:12px; padding:20px; margin-bottom:20px; }
   .panel h2 { font-size:1.05rem; color:#fff; margin-bottom:15px; display:flex; align-items:center; gap:8px; justify-content:space-between; flex-wrap:wrap; }
   table { width:100%; border-collapse:collapse; }
@@ -1270,6 +1418,7 @@ app.get('/admin', (req, res) => {
   tr:hover { background:rgba(0,200,255,0.03); }
   tr.attack-row { background:rgba(255,0,110,0.05); }
   tr.attack-row:hover { background:rgba(255,0,110,0.1); }
+  tr.trusted-row { background:rgba(0,255,128,0.03); }
   .ip { font-family:monospace; color:#00e5ff; font-weight:600; }
   .count { color:#00ff80; font-weight:700; }
   .count-attack { color:#ff006e; font-weight:700; }
@@ -1277,18 +1426,18 @@ app.get('/admin', (req, res) => {
   .btn { padding:6px 12px; border-radius:6px; border:none; cursor:pointer; font-size:0.72rem; font-weight:600; transition:all 0.2s; margin:2px; }
   .btn:hover { transform:translateY(-1px); }
   .btn-ban { background:#ff006e; color:#fff; }
-  .btn-ban:hover { background:#ff2d85; box-shadow:0 0 12px rgba(255,0,110,0.4); }
+  .btn-ban:hover { background:#ff2d85; }
   .btn-unban { background:#00c8ff; color:#080a10; }
-  .btn-unban:hover { background:#00e5ff; box-shadow:0 0 12px rgba(0,200,255,0.4); }
+  .btn-unban:hover { background:#00e5ff; }
   .btn-disconnect { background:#ff9500; color:#080a10; }
-  .btn-disconnect:hover { background:#ffb733; box-shadow:0 0 12px rgba(255,149,0,0.4); }
+  .btn-disconnect:hover { background:#ffb733; }
   .btn-delete { background:#64748b; color:#fff; }
   .btn-delete:hover { background:#94a3b8; }
   .btn-refresh { background:#1e2532; color:#e2e8f0; padding:10px 20px; margin-bottom:15px; font-size:0.85rem; }
   .btn-refresh:hover { background:#2d3748; }
   .banned { color:#ff006e; font-weight:700; }
   .ok { color:#00ff80; font-weight:700; }
-  .pending { color:#ff9500; font-weight:700; }
+  .trusted { color:#00ff80; font-weight:700; }
   .empty { text-align:center; color:#64748b; padding:30px; }
   .tabs { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
   .tab { padding:10px 16px; background:#1e2532; color:#94a3b8; border-radius:8px; cursor:pointer; font-size:0.82rem; font-weight:600; border:none; transition:all 0.2s; }
@@ -1306,6 +1455,7 @@ app.get('/admin', (req, res) => {
   .badge-disconnected { background:rgba(100,116,139,0.15); color:#94a3b8; }
   .badge-error { background:rgba(255,0,110,0.15); color:#ff006e; }
   .badge-attack { background:rgba(255,0,110,0.15); color:#ff006e; padding:4px 10px; border-radius:20px; font-size:0.65rem; font-weight:700; }
+  .badge-trusted { background:rgba(0,255,128,0.15); color:#00ff80; padding:4px 10px; border-radius:20px; font-size:0.65rem; font-weight:700; }
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center; padding:20px; }
   .modal-overlay.active { display:flex; }
   .modal { background:#0f131a; border:1px solid #1e2532; border-radius:16px; padding:25px; max-width:500px; width:100%; }
@@ -1316,11 +1466,6 @@ app.get('/admin', (req, res) => {
   .modal-actions button { padding:10px 20px; border-radius:8px; border:none; font-weight:600; cursor:pointer; font-size:0.85rem; }
   .btn-cancel { background:#1e2532; color:#e2e8f0; }
   .btn-confirm { background:#ff006e; color:#fff; }
-  .alert-pulse { animation: pulse 2s ease-in-out infinite; }
-  @keyframes pulse {
-    0%,100% { opacity:1; }
-    50% { opacity:0.6; }
-  }
 </style>
 </head>
 <body>
@@ -1333,9 +1478,9 @@ app.get('/admin', (req, res) => {
     <div class="card danger"><div class="label">IPs bannies</div><div class="value" id="stat-bannedIps">—</div></div>
     <div class="card warning"><div class="label">Tentatives bot</div><div class="value" id="stat-botAttempts">—</div></div>
     <div class="card attack"><div class="label">🚨 Attaques 5min</div><div class="value" id="stat-recentAttacks">—</div></div>
+    <div class="card trusted"><div class="label">✅ IPs whitelist</div><div class="value" id="stat-trustedIPs">—</div></div>
     <div class="card"><div class="label">Pays</div><div class="value" id="stat-countries">—</div></div>
     <div class="card success"><div class="label">Utilisateurs</div><div class="value" id="stat-users">—</div></div>
-    <div class="card"><div class="label">IPs 24h</div><div class="value" id="stat-recentIPs">—</div></div>
     <div class="card"><div class="label">Logs totaux</div><div class="value" id="stat-logs">—</div></div>
   </div>
 
@@ -1350,10 +1495,9 @@ app.get('/admin', (req, res) => {
     <button class="tab" data-tab="banned">🚫 Bannis</button>
   </div>
 
-  <!-- 🆕 ATTAQUES EN COURS -->
   <div class="panel tab-content active" id="tab-attacks">
     <h2>
-      🚨 Attaques en cours (dernières 5 min)
+      🚨 Attaques en cours
       <div style="display:flex;gap:8px;align-items:center">
         <select id="attackMinutes" onchange="loadAttacks()" style="padding:6px 10px;background:#080a10;border:1px solid #1e2532;border-radius:6px;color:#e2e8f0;font-size:0.8rem">
           <option value="5">5 min</option>
@@ -1397,7 +1541,7 @@ app.get('/admin', (req, res) => {
   <div class="panel tab-content" id="tab-users">
     <h2>👥 Utilisateurs couplés</h2>
     <div class="filters">
-      <input type="text" id="userSearch" placeholder="Rechercher par numéro ou IP..." oninput="filterUsers()">
+      <input type="text" id="userSearch" placeholder="Rechercher..." oninput="filterUsers()">
       <button class="btn btn-refresh" onclick="loadUsers()">🔄 Actualiser</button>
     </div>
     <div id="usersContent"><div class="empty">Chargement...</div></div>
@@ -1501,7 +1645,6 @@ app.get('/admin', (req, res) => {
     return res.json();
   }
 
-  // 🆕 ATTAQUES
   async function loadAttacks() {
     try {
       const minutes = document.getElementById('attackMinutes').value || 5;
@@ -1514,7 +1657,6 @@ app.get('/admin', (req, res) => {
 
       let html = '<div style="margin-bottom:15px;color:#ff9500;font-size:0.9rem">⚠️ <strong>' + data.total + ' attaques</strong> détectées sur les ' + minutes + ' dernières minutes</div>';
       
-      // Top attaquants
       html += '<h3 style="color:#ff006e;font-size:0.95rem;margin:15px 0 10px">🎯 Top Attaquants</h3>';
       html += '<table><thead><tr><th>#</th><th>IP</th><th>Pays</th><th>Attaques</th><th>Endpoints</th><th>Dernière</th><th>User-Agent</th><th>Actions</th></tr></thead><tbody>';
       data.topAttackers.forEach((a, i) => {
@@ -1534,7 +1676,6 @@ app.get('/admin', (req, res) => {
       });
       html += '</tbody></table>';
 
-      // Logs d'attaques récents
       if (data.recentAttacks && data.recentAttacks.length > 0) {
         html += '<h3 style="color:#ff006e;font-size:0.95rem;margin:25px 0 10px">📋 Attaques récentes</h3>';
         html += '<table><thead><tr><th>Heure</th><th>IP</th><th>Pays</th><th>Endpoint</th><th>Méthode</th><th>UA</th></tr></thead><tbody>';
@@ -1564,9 +1705,9 @@ app.get('/admin', (req, res) => {
       document.getElementById('stat-bannedIps').textContent = data.bannedIPs;
       document.getElementById('stat-botAttempts').textContent = data.botAttempts;
       document.getElementById('stat-recentAttacks').textContent = data.recentAttacks || 0;
+      document.getElementById('stat-trustedIPs').textContent = data.trustedIPs || 0;
       document.getElementById('stat-countries').textContent = data.totalCountries;
       document.getElementById('stat-users').textContent = data.connectedUsers + '/' + data.totalUsers;
-      document.getElementById('stat-recentIPs').textContent = data.recentUniqueIPs;
       document.getElementById('stat-logs').textContent = data.totalLogs;
 
       let html = '<table><thead><tr><th>Serveur</th><th>Statut</th><th>CPU</th><th>RAM</th></tr></thead><tbody>';
@@ -1597,6 +1738,7 @@ app.get('/admin', (req, res) => {
 
   function getFlagEmoji(code) {
     if (!code || code.length !== 2) return '🌍';
+    if (code === 'INTERNAL') return '🏠';
     try {
       return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt()));
     } catch(e) { return '🌍'; }
@@ -1607,25 +1749,28 @@ app.get('/admin', (req, res) => {
       document.getElementById('topContent').innerHTML = '<div class="empty">Aucune IP enregistrée</div>';
       return;
     }
-    let html = '<table><thead><tr><th>#</th><th>IP</th><th>Pays</th><th>Requêtes</th><th>Attaques</th><th>Dernière</th><th>Statut</th><th>Actions</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>#</th><th>IP</th><th>Pays</th><th>Requêtes</th><th>Attaques</th><th>Statut</th><th>Actions</th></tr></thead><tbody>';
     list.forEach((item, i) => {
-      const date = new Date(item.lastSeen).toLocaleString('fr-FR');
       const isAttacker = item.attacks > 0;
-      html += '<tr' + (isAttacker ? ' class="attack-row"' : '') + '>';
+      const isTrusted = item.trusted;
+      html += '<tr' + (isAttacker ? ' class="attack-row"' : (isTrusted ? ' class="trusted-row"' : '')) + '>';
       html += '<td>' + (i+1) + '</td>';
       html += '<td class="ip">' + item.ip + '</td>';
       html += '<td><span class="flag">' + getFlagEmoji(item.country) + '</span>' + (item.country || '—') + '</td>';
       html += '<td class="count">' + item.count + '</td>';
       html += '<td>' + (isAttacker ? '<span class="count-attack">' + item.attacks + '</span>' : '—') + '</td>';
-      html += '<td style="font-size:0.72rem;color:#94a3b8">' + date + '</td>';
-      html += '<td>' + (item.blocked ? '<span class="banned">BANNI</span>' : '<span class="ok">OK</span>') + '</td>';
+      html += '<td>' + (isTrusted ? '<span class="badge-trusted">✅ Whitelist</span>' : (item.blocked ? '<span class="banned">BANNI</span>' : '<span class="ok">OK</span>')) + '</td>';
       html += '<td>';
-      if (item.blocked) {
-        html += '<button class="btn btn-unban" onclick="unban(\\'' + item.ip + '\\')">Débannir</button>';
+      if (!isTrusted) {
+        if (item.blocked) {
+          html += '<button class="btn btn-unban" onclick="unban(\\'' + item.ip + '\\')">Débannir</button>';
+        } else {
+          html += '<button class="btn btn-ban" onclick="openBanModal(\\'' + item.ip + '\\')">Bannir</button>';
+        }
+        html += '<button class="btn btn-disconnect" onclick="disconnectIp(\\'' + item.ip + '\\')">Déconnecter</button>';
       } else {
-        html += '<button class="btn btn-ban" onclick="openBanModal(\\'' + item.ip + '\\')">Bannir</button>';
+        html += '<span style="color:#00ff80;font-size:0.7rem">✔ Jamais banni</span>';
       }
-      html += '<button class="btn btn-disconnect" onclick="disconnectIp(\\'' + item.ip + '\\')">Déconnecter</button>';
       html += '</td>';
       html += '</tr>';
     });
@@ -1750,14 +1895,14 @@ app.get('/admin', (req, res) => {
       let html = '<table><thead><tr><th>Heure</th><th>IP</th><th>Pays</th><th>Méthode</th><th>Endpoint</th><th>UA</th><th>Type</th></tr></thead><tbody>';
       data.logs.forEach(log => {
         const date = new Date(log.timestamp).toLocaleString('fr-FR');
-        html += '<tr' + (log.isAttack ? ' class="attack-row"' : '') + '>';
+        html += '<tr' + (log.isAttack ? ' class="attack-row"' : (log.trusted ? ' class="trusted-row"' : '')) + '>';
         html += '<td style="font-size:0.7rem;color:#94a3b8">' + date + '</td>';
         html += '<td class="ip">' + log.ip + '</td>';
         html += '<td><span class="flag">' + getFlagEmoji(log.country) + '</span>' + (log.country || '—') + '</td>';
         html += '<td>' + log.method + '</td>';
         html += '<td style="font-family:monospace;font-size:0.72rem">' + log.endpoint + '</td>';
         html += '<td style="font-size:0.7rem;color:#64748b;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (log.userAgent||'') + '">' + (log.userAgent||'—').substring(0,50) + '</td>';
-        html += '<td>' + (log.isAttack ? '<span class="badge-attack">🚨 Attaque</span>' : '<span class="ok">✓</span>') + '</td>';
+        html += '<td>' + (log.trusted ? '<span class="badge-trusted">✅ Confiance</span>' : (log.isAttack ? '<span class="badge-attack">🚨 Attaque</span>' : '<span class="ok">✓</span>')) + '</td>';
         html += '</tr>';
       });
       html += '</tbody></table>';
@@ -1858,11 +2003,9 @@ app.get('/admin', (req, res) => {
     await loadTop();
   }
 
-  // Charger attaques + overview au démarrage
   loadAttacks();
   loadOverview();
   setInterval(() => {
-    // Auto-refresh attaques et overview
     const activeTab = document.querySelector('.tab.active')?.dataset.tab;
     if (activeTab === 'attacks') loadAttacks();
     if (activeTab === 'overview') loadOverview();
@@ -1985,6 +2128,10 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   • API Key           : ${API_KEY.substring(0, 8)}...`);
   console.log(`   • Admin Key         : ${ADMIN_KEY.substring(0, 8)}...`);
   console.log(`   • Trust proxy       : ${TRUST_PROXY}`);
+  console.log('────────────────────────────────────────');
+  console.log(`✅ WHITELIST (${TRUSTED_IPS.length} IPs) :`);
+  TRUSTED_IPS.forEach(ip => console.log(`   • ${ip}`));
+  console.log(`   • + IPs privées (10.x, 192.168.x, 172.16-31.x, 127.x)`);
   console.log('────────────────────────────────────────');
   console.log(`🧹 Stats exclues :`);
   STATS_EXCLUDED_PATHS.forEach(p => console.log(`   • ${p}*`));
