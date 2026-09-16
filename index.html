@@ -17,6 +17,20 @@
       padding: 20px;
       display: flex;
       justify-content: center;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* 🆕 ANIMATION TECHNOLOGIQUE DARK BLUE EN ARRIÈRE-PLAN */
+    #techBackground {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, #0a1428 0%, #060810 70%, #04060c 100%);
     }
 
     /* 📦 LAYOUT PRINCIPAL */
@@ -26,6 +40,50 @@
       display: flex;
       flex-direction: column;
       gap: 20px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* 🆕 TITRE HEXTECH GÉANT EN HAUT, CENTRÉ, DÉGRADÉ BLEU */
+    .hero-title {
+      width: 100%;
+      text-align: center;
+      padding: 30px 20px 10px;
+      position: relative;
+      z-index: 1;
+    }
+    .hero-title h1 {
+      font-size: clamp(2.8rem, 9vw, 6.5rem);
+      font-weight: 900;
+      letter-spacing: 6px;
+      line-height: 1;
+      background: linear-gradient(135deg, #00c8ff 0%, #4a90ff 35%, #7b2ff7 70%, #00e5ff 100%);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+      text-transform: uppercase;
+      animation: gradientMove 6s ease infinite;
+      filter: drop-shadow(0 0 25px rgba(0, 200, 255, 0.35));
+      font-family: 'Inter', sans-serif;
+    }
+    @keyframes gradientMove {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .hero-title .hero-glow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 60%;
+      height: 100%;
+      background: radial-gradient(ellipse, rgba(0, 200, 255, 0.15) 0%, transparent 70%);
+      filter: blur(40px);
+      pointer-events: none;
+      z-index: -1;
     }
 
     /* 🟢 HEADER */
@@ -498,10 +556,21 @@
       .footer { flex-direction: column; align-items: stretch; text-align: center; }
       .footer-socials { justify-content: center; }
       .footer-credit { text-align: center; }
+      .hero-title { padding: 20px 10px 5px; }
+      .hero-title h1 { letter-spacing: 3px; }
     }
   </style>
 </head>
 <body>
+
+  <!-- 🆕 CANVAS D'ANIMATION TECHNOLOGIQUE DARK BLUE -->
+  <canvas id="techBackground"></canvas>
+
+  <!-- 🆕 TITRE HEXTECH GÉANT EN HAUT, CENTRÉ, DÉGRADÉ BLEU -->
+  <div class="hero-title">
+    <span class="hero-glow"></span>
+    <h1>HEXTECH</h1>
+  </div>
 
   <div class="dashboard">
     
@@ -576,7 +645,7 @@
       
       <div class="checkbox-group">
         <input type="checkbox" id="consent">
-        <label for="consent">Je consens à coupler mon numéro. Je comprends que mon numéro je peux me déconnecter à tout moment.</label>
+        <label for="consent">Je consens à coupler mon numéro.je peux me déconnecter à tout moment.</label>
       </div>
 
       <button class="btn-submit" id="pairBtn" disabled>Générer le code de couplage</button>
@@ -628,16 +697,16 @@
   <div class="about-overlay" id="aboutOverlay">
     <div class="about-modal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
       <h2 id="aboutTitle">
-        🤖 Bot Bailey
+        WhatsApp Bot 
         <span class="badge-ai">IA</span>
       </h2>
       <p class="about-subtitle">
-        Bailey est un assistant intelligent de nouvelle génération conçu par HEXTECH. Il automatise, sécurise et optimise vos communications WhatsApp, que ce soit pour un usage personnel, un groupe ou une entreprise.
+       WABOT Bailey est un assistant intelligent de nouvelle génération conçu par HEXTECH. Il automatise, sécurise et optimise vos communications WhatsApp, que ce soit pour un usage personnel, un groupe ou une entreprise.
       </p>
 
       <!-- DÉFINITION -->
       <div class="about-section">
-        <h3>📌 Définition</h3>
+        <h3> Définition</h3>
         <p>
           Bailey est un bot WhatsApp  avec 608 commandes intégré basé sur une architecture multi-appareils moderne. Il se couple à votre numéro via un code sécurisé, puis agit comme un assistant autonome capable de gérer des conversations, d'exécuter des commandes, de modérer des groupes et d'intégrer des services tiers — le tout sans interrompre votre utilisation normale de WhatsApp.
         </p>
@@ -761,6 +830,132 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && aboutOverlay.classList.contains('active')) closeAbout();
     });
+
+    // 🆕 ==================== ANIMATION TECHNOLOGIQUE DARK BLUE ====================
+    (function initTechBackground() {
+      const canvas = document.getElementById('techBackground');
+      const ctxBg = canvas.getContext('2d');
+      let width, height;
+      let particles = [];
+      const PARTICLE_COUNT = 80;
+      const MAX_DISTANCE = 150;
+      const COLORS = ['#00c8ff', '#1e6fff', '#0a4a99', '#00e5ff', '#3a7bd5'];
+
+      function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      }
+
+      function createParticles() {
+        particles = [];
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          particles.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: (Math.random() - 0.5) * 0.5,
+            radius: Math.random() * 2 + 1,
+            color: COLORS[Math.floor(Math.random() * COLORS.length)],
+            alpha: Math.random() * 0.6 + 0.3
+          });
+        }
+      }
+
+      // Grille technologique en perspective
+      let gridOffset = 0;
+
+      function drawGrid() {
+        ctxBg.save();
+        ctxBg.strokeStyle = 'rgba(0, 120, 255, 0.08)';
+        ctxBg.lineWidth = 1;
+        
+        const gridSize = 60;
+        // Lignes verticales
+        for (let x = 0; x < width; x += gridSize) {
+          ctxBg.beginPath();
+          ctxBg.moveTo(x, 0);
+          ctxBg.lineTo(x, height);
+          ctxBg.stroke();
+        }
+        // Lignes horizontales défilantes
+        for (let y = -gridSize + (gridOffset % gridSize); y < height; y += gridSize) {
+          ctxBg.beginPath();
+          ctxBg.moveTo(0, y);
+          ctxBg.lineTo(width, y);
+          ctxBg.stroke();
+        }
+        ctxBg.restore();
+      }
+
+      function drawParticles() {
+        for (let i = 0; i < particles.length; i++) {
+          const p = particles[i];
+          
+          // Déplacement
+          p.x += p.vx;
+          p.y += p.vy;
+          
+          // Rebond sur les bords
+          if (p.x < 0 || p.x > width) p.vx *= -1;
+          if (p.y < 0 || p.y > height) p.vy *= -1;
+          
+          // Dessiner la particule avec halo
+          ctxBg.beginPath();
+          ctxBg.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctxBg.fillStyle = p.color;
+          ctxBg.globalAlpha = p.alpha;
+          ctxBg.fill();
+          
+          // Halo lumineux
+          ctxBg.beginPath();
+          ctxBg.arc(p.x, p.y, p.radius * 3, 0, Math.PI * 2);
+          ctxBg.fillStyle = p.color;
+          ctxBg.globalAlpha = p.alpha * 0.15;
+          ctxBg.fill();
+          
+          // Connexions entre particules proches
+          for (let j = i + 1; j < particles.length; j++) {
+            const p2 = particles[j];
+            const dx = p.x - p2.x;
+            const dy = p.y - p2.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < MAX_DISTANCE) {
+              const opacity = (1 - dist / MAX_DISTANCE) * 0.35;
+              ctxBg.beginPath();
+              ctxBg.moveTo(p.x, p.y);
+              ctxBg.lineTo(p2.x, p2.y);
+              ctxBg.strokeStyle = `rgba(0, 150, 255, ${opacity})`;
+              ctxBg.lineWidth = 0.8;
+              ctxBg.globalAlpha = 1;
+              ctxBg.stroke();
+            }
+          }
+        }
+        ctxBg.globalAlpha = 1;
+      }
+
+      function animate() {
+        ctxBg.clearRect(0, 0, width, height);
+        
+        drawGrid();
+        drawParticles();
+        
+        gridOffset += 0.3;
+        
+        requestAnimationFrame(animate);
+      }
+
+      window.addEventListener('resize', () => {
+        resize();
+        createParticles();
+      });
+
+      resize();
+      createParticles();
+      animate();
+    })();
+    // 🆕 ==================== FIN ANIMATION ====================
 
     // 📊 INITIALISATION DU GRAPHIQUE CHART.JS
     const ctx = document.getElementById('realtimeChart').getContext('2d');
