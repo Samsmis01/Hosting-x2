@@ -2,6 +2,8 @@
 // Serveur maître HEXTECH - Gère 4 workers KataBump
 // 🔒 SÉCURISÉ : rate-limit + IP logging + API key + CORS strict
 // 🆕 ADMIN COMPLET : déconnexion + ban IP + stats pays + clics
+// 🆕 v2 : Exclusions stats internes + Auth disconnect/status
+// 🆕 v3 : Turnstile serveur + Page admin attaques
 
 const express = require('express');
 const cors = require('cors');
@@ -25,6 +27,27 @@ const API_KEY = process.env.HEXTECH_SECRET_KEY || 'change-moi-en-prod-2026';
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s => s.trim());
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true' || true;
 
+// 🆕 CLOUDFLARE TURNSTILE
+const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '';
+const TURNSTILE_ENABLED = process.env.TURNSTILE_ENABLED !== 'false' && TURNSTILE_SECRET_KEY.length > 0;
+const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+
+// 🆕 CONFIGURATION DES STATS
+const STATS_EXCLUDED_PATHS = [
+  '/health',
+  '/api/worker/',
+  '/api/admin/',
+  '/static/',
+  '/admin',        // 🆕 Page admin
+  '/admin.html'    // 🆕 Page admin HTML
+];
+
+// 🆕 Configuration de l'anti-énumération
+const ENUM_CONFIG = {
+  maxDistinctPhones: 10,
+  windowMs: 60 * 60 * 1000
+};
+
 // 🔒 CONFIGURATION RATE-LIMIT
 const RATE_LIMIT = {
   global: { windowMs: 60 * 1000, max: 120 },
@@ -45,7 +68,7 @@ const SERVERS = [
   {
     id: 1,
     name: 'Serveur 1 - Web',
-    url: process.env.SERVER_1_URL || 'https://last-judment.onrender.com',
+    url: process.env.SERVER_1_URL || 'https://hextechcar12omega.onrender.com',
     lastPing: 0,
     online: false,
     cpu: 0,
@@ -103,6 +126,11 @@ function getClientIP(req) {
   return req.ip || req.connection?.remoteAddress || 'unknown';
 }
 
+// 🆕 Vérifie si un chemin doit être EXCLU des stats
+function isExcludedFromStats(pathname) {
+  return STATS_EXCLUDED_PATHS.some(p => pathname.startsWith(p));
+}
+
 // ==================== 🔒 GESTION DES FICHIERS DE LOG ====================
 function loadJSON(file, defaultValue = {}) {
   try {
@@ -126,8 +154,20 @@ function saveJSON(file, data) {
 // ==================== 🔒 ENREGISTREMENT DES IPs (avec stats pays) ====================
 const ipLogs = loadJSON(IP_LOGS_FILE, { logs: [], stats: {}, countries: {} });
 
-// S'assurer que countries existe (migration)
 if (!ipLogs.countries) ipLogs.countries = {};
+
+// 🆕 Détecte si une requête est suspecte (pour l'onglet attaques)
+function isAttackLog(log) {
+  const ua = (log.userAgent || '').toLowerCase();
+  const suspiciousUAs = [
+    'curl', 'wget', 'python', 'scrapy', 'postman',
+    'insomnia', 'httpie', 'go-http', 'java/', 'okhttp'
+  ];
+  // User-agent suspect OU endpoint sensible
+  if (suspiciousUAs.some(p => ua.includes(p))) return true;
+  if (log.endpoint === '/api/pair' && log.method === 'POST') return true;
+  return false;
+}
 
 function logIP(req, endpoint, extra = {}) {
   const ip = getClientIP(req);
@@ -136,7 +176,7 @@ function logIP(req, endpoint, extra = {}) {
   const country = req.headers['cf-ipcountry'] || 'unknown';
   const city = req.headers['cf-ipcity'] || null;
 
-  ipLogs.logs.push({
+  const logEntry = {
     ip,
     endpoint,
     method: req.method,
@@ -145,8 +185,14 @@ function logIP(req, endpoint, extra = {}) {
     country,
     city,
     referer: req.headers['referer'] || null,
+    origin: req.headers['origin'] || null,
     ...extra
-  });
+  };
+
+  // 🆕 Marquer les attaques
+  logEntry.isAttack = isAttackLog(logEntry);
+
+  ipLogs.logs.push(logEntry);
 
   if (ipLogs.logs.length > 5000) {
     ipLogs.logs = ipLogs.logs.slice(-5000);
@@ -161,7 +207,8 @@ function logIP(req, endpoint, extra = {}) {
       blocked: false,
       violations: [],
       country: country,
-      city: city
+      city: city,
+      attacks: 0
     };
   }
   ipLogs.stats[ip].lastSeen = now;
@@ -169,6 +216,9 @@ function logIP(req, endpoint, extra = {}) {
   ipLogs.stats[ip].country = country || ipLogs.stats[ip].country;
   ipLogs.stats[ip].city = city || ipLogs.stats[ip].city;
   ipLogs.stats[ip].endpoints[endpoint] = (ipLogs.stats[ip].endpoints[endpoint] || 0) + 1;
+  if (logEntry.isAttack) {
+    ipLogs.stats[ip].attacks = (ipLogs.stats[ip].attacks || 0) + 1;
+  }
 
   // 🆕 Stats par pays
   if (!ipLogs.countries[country]) {
@@ -176,6 +226,7 @@ function logIP(req, endpoint, extra = {}) {
       count: 0,
       uniqueIPs: {},
       endpoints: {},
+      attacks: 0,
       firstSeen: now,
       lastSeen: now
     };
@@ -184,6 +235,9 @@ function logIP(req, endpoint, extra = {}) {
   ipLogs.countries[country].lastSeen = now;
   ipLogs.countries[country].uniqueIPs[ip] = (ipLogs.countries[country].uniqueIPs[ip] || 0) + 1;
   ipLogs.countries[country].endpoints[endpoint] = (ipLogs.countries[country].endpoints[endpoint] || 0) + 1;
+  if (logEntry.isAttack) {
+    ipLogs.countries[country].attacks = (ipLogs.countries[country].attacks || 0) + 1;
+  }
 
   scheduleSaveIPLogs();
 }
@@ -234,7 +288,7 @@ function recordViolation(ip, reason) {
       reason: `Trop de violations: ${reason}`,
       bannedAt: now
     };
-    console.warn(`🚫 IP BANNIE: ${ip} pour ${BAN_CONFIG.banDurationMs / 1000 / 60} minutes`);
+    console.warn(`🚫 IP BANNIE: ${ip} pour ${BAN_CONFIG.binDurationMs / 1000 / 60} minutes`);
     saveJSON(BLACKLIST_FILE, blacklist);
   }
 }
@@ -299,7 +353,7 @@ function requireApiKey(req, res, next) {
   next();
 }
 
-// ==================== 🔒 VÉRIFICATION ADMIN (HEADER **OU** QUERY) ====================
+// ==================== 🔒 VÉRIFICATION ADMIN ====================
 function isAdminAuthorized(req) {
   const headerKey = req.headers['x-admin-key'];
   if (headerKey && headerKey === ADMIN_KEY) return true;
@@ -321,6 +375,65 @@ function requireAdmin(req, res, next) {
     return res.status(401).json({ error: 'Non autorisé' });
   }
   next();
+}
+
+// ==================== 🆕 VÉRIFICATION CLOUDFLARE TURNSTILE ====================
+// Vérifie le token Turnstile envoyé par le client auprès de Cloudflare
+// → Bloque les fake-sites qui n'ont pas la bonne clé Turnstile
+async function verifyTurnstile(req, res, next) {
+  // Si Turnstile désactivé (dev), passer
+  if (!TURNSTILE_ENABLED) {
+    console.warn('⚠️ Turnstile désactivé (TURNSTILE_ENABLED=false)');
+    return next();
+  }
+
+  // Récupérer le token depuis header, body, ou query
+  const token =
+    req.headers['cf-turnstile-response'] ||
+    req.body?.turnstileToken ||
+    req.body?.cfTurnstileResponse ||
+    req.query?.turnstileToken;
+
+  if (!token) {
+    const ip = getClientIP(req);
+    recordViolation(ip, 'missing-turnstile-token');
+    console.warn(`🚫 Turnstile token manquant depuis ${ip}`);
+    return res.status(403).json({
+      error: 'Vérification de sécurité requise. Rechargez la page.'
+    });
+  }
+
+  try {
+    // Vérifier le token auprès de Cloudflare
+    const verifyRes = await fetch(TURNSTILE_VERIFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        secret: TURNSTILE_SECRET_KEY,
+        response: token,
+        remoteip: getClientIP(req)
+      })
+    });
+
+    const result = await verifyRes.json();
+
+    if (!result.success) {
+      const ip = getClientIP(req);
+      recordViolation(ip, 'turnstile-failed');
+      console.warn(`🚫 Turnstile échoué depuis ${ip}:`, result['error-codes']);
+      return res.status(403).json({
+        error: 'Vérification captcha échouée. Réessayez.'
+      });
+    }
+
+    // ✅ Token valide
+    req.turnstileVerified = true;
+    next();
+
+  } catch (e) {
+    console.error(`❌ Erreur Turnstile: ${e.message}`);
+    return res.status(500).json({ error: 'Erreur de vérification captcha' });
+  }
 }
 
 // ==================== 🔒 DÉTECTION USER-AGENT SUSPECT ====================
@@ -345,6 +458,74 @@ function detectSuspiciousClient(req, res, next) {
   next();
 }
 
+// ==================== 🆕 VÉRIFICATION SESSION TOKEN ====================
+function requireSessionToken(req, res, next) {
+  const phone = req.params.phone;
+  const users = loadUsers();
+  const user = users[phone];
+
+  if (!user) {
+    return res.status(404).json({ error: 'Numéro non enregistré' });
+  }
+
+  const providedToken =
+    req.headers['x-session-token'] ||
+    req.query?.token ||
+    req.body?.token;
+
+  if (user.sessionToken) {
+    if (!providedToken || providedToken !== user.sessionToken) {
+      const ip = getClientIP(req);
+      recordViolation(ip, 'invalid-session-token');
+      console.warn(`🚫 Session token invalide pour ${phone} depuis ${ip}`);
+      return res.status(401).json({ error: 'Session invalide. Reconnectez-vous.' });
+    }
+  } else {
+    console.warn(`⚠️ Utilisateur ${phone} sans session token (legacy)`);
+  }
+
+  next();
+}
+
+// ==================== 🆕 ANTI-ÉNUMÉRATION ====================
+const enumerationTracker = new Map();
+
+function antiEnumeration(req, res, next) {
+  const ip = getClientIP(req);
+  const phone = req.params.phone;
+  const now = Date.now();
+
+  if (!enumerationTracker.has(ip)) {
+    enumerationTracker.set(ip, { phones: new Set(), resetAt: now + ENUM_CONFIG.windowMs });
+  }
+
+  const entry = enumerationTracker.get(ip);
+
+  if (now > entry.resetAt) {
+    entry.phones.clear();
+    entry.resetAt = now + ENUM_CONFIG.windowMs;
+  }
+
+  entry.phones.add(phone);
+
+  if (entry.phones.size > ENUM_CONFIG.maxDistinctPhones) {
+    recordViolation(ip, 'enumeration');
+    console.warn(`🚫 Anti-énumération: ${ip} a testé ${entry.phones.size} numéros différents`);
+    return res.status(429).json({
+      error: 'Trop de numéros différents testés. Réessayez plus tard.'
+    });
+  }
+
+  next();
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of enumerationTracker.entries()) {
+    if (now > entry.resetAt + 60000) enumerationTracker.delete(ip);
+  }
+}, 5 * 60 * 1000);
+
 // ==================== 🔒 HEADERS DE SÉCURITÉ ====================
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -364,8 +545,8 @@ app.use(cors({
     console.warn(`🚫 CORS bloqué pour origin: ${origin}`);
     return callback(new Error('CORS non autorisé'));
   },
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'X-API-KEY', 'X-ADMIN-KEY', 'CF-Turnstile-Response'],
+  methods: ['GET', 'POST', 'OPTIONS', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'X-API-KEY', 'X-ADMIN-KEY', 'X-Session-Token', 'CF-Turnstile-Response'],
   credentials: false,
   maxAge: 86400
 }));
@@ -374,9 +555,9 @@ app.use(cors({
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
-// ==================== 🔒 MIDDLEWARE GLOBAL : LOG + RATE-LIMIT ====================
+// ==================== 🆕 MIDDLEWARE GLOBAL : LOG INTELLIGENT ====================
 app.use((req, res, next) => {
-  if (req.path !== '/health' && !req.path.startsWith('/static')) {
+  if (!isExcludedFromStats(req.path)) {
     logIP(req, req.path);
   }
   next();
@@ -437,7 +618,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     uptime: Math.floor(process.uptime()),
-    ip: getClientIP(req)
+    ip: getClientIP(req),
+    turnstileEnabled: TURNSTILE_ENABLED
   });
 });
 
@@ -480,9 +662,10 @@ app.get('/api/servers', (req, res) => {
   res.json({ servers: serversStatus });
 });
 
-// ==================== ROUTE : PAIRING ====================
+// ==================== 🆕 ROUTE : PAIRING (avec Turnstile) ====================
 app.post('/api/pair',
   rateLimit(RATE_LIMIT.pair, 'pair'),
+  verifyTurnstile,              // 🆕 Vérification Cloudflare
   async (req, res) => {
     const { phone, consent, serverId } = req.body;
     const clientIP = getClientIP(req);
@@ -528,6 +711,11 @@ app.post('/api/pair',
       return res.status(409).json({ error: 'Ce numéro est déjà couplé. Déconnectez-le d\'abord.' });
     }
 
+    let sessionToken = users[phone]?.sessionToken;
+    if (!sessionToken) {
+      sessionToken = crypto.randomBytes(24).toString('hex');
+    }
+
     if (users[phone] && users[phone].status === 'pending' && users[phone].code) {
       return res.json({
         success: true,
@@ -535,6 +723,7 @@ app.post('/api/pair',
         phone: phone,
         serverId: users[phone].serverId,
         status: 'pending',
+        sessionToken: sessionToken,
         message: 'Code déjà généré'
       });
     }
@@ -545,6 +734,7 @@ app.post('/api/pair',
       createdAt: users[phone]?.createdAt || Date.now(),
       status: 'pending',
       code: null,
+      sessionToken: sessionToken,
       ip: clientIP,
       userAgent: req.headers['user-agent'] || 'unknown',
       country: req.headers['cf-ipcountry'] || 'unknown'
@@ -567,6 +757,7 @@ app.post('/api/pair',
         phone: phone,
         serverId: targetServerId,
         status: 'pending',
+        sessionToken: sessionToken,
         instructions: 'Ouvrez WhatsApp > Appareils liés > Lier avec un numéro'
       });
 
@@ -580,33 +771,33 @@ app.post('/api/pair',
   }
 );
 
-// ==================== ROUTE : STATUT ====================
+// ==================== 🆕 ROUTE : STATUT ====================
 app.get('/api/status/:phone',
   rateLimit(RATE_LIMIT.status, 'status'),
+  antiEnumeration,
+  requireSessionToken,
   (req, res) => {
     const { phone } = req.params;
     const users = loadUsers();
-
-    if (!users[phone]) return res.status(404).json({ error: 'Numéro non enregistré' });
+    const user = users[phone];
 
     res.json({
-      phone: users[phone].phone,
-      serverId: users[phone].serverId,
-      status: users[phone].status,
-      createdAt: users[phone].createdAt,
-      connectedAt: users[phone].connectedAt || null
+      phone: user.phone,
+      serverId: user.serverId,
+      status: user.status,
+      createdAt: user.createdAt,
+      connectedAt: user.connectedAt || null
     });
   }
 );
 
-// ==================== ROUTE : DÉCONNEXION ====================
+// ==================== 🆕 ROUTE : DÉCONNEXION ====================
 app.post('/api/disconnect/:phone',
   rateLimit(RATE_LIMIT.disconnect, 'disconnect'),
+  requireSessionToken,
   (req, res) => {
     const { phone } = req.params;
     const users = loadUsers();
-
-    if (!users[phone]) return res.status(404).json({ error: 'Numéro non enregistré' });
 
     users[phone].status = 'disconnect_requested';
     users[phone].disconnectAt = Date.now();
@@ -617,7 +808,7 @@ app.post('/api/disconnect/:phone',
   }
 );
 
-// ==================== ROUTES WORKER (par serveur) ====================
+// ==================== ROUTES WORKER ====================
 app.get('/api/worker/:serverId/pending', requireAdmin, (req, res) => {
   const serverId = parseInt(req.params.serverId);
   if (![1, 2, 3, 4].includes(serverId)) return res.status(400).json({ error: 'Serveur invalide' });
@@ -720,9 +911,8 @@ app.post('/api/worker/:serverId/stats', requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
-// ==================== ROUTES ADMIN (accessible navigateur) ====================
+// ==================== ROUTES ADMIN ====================
 
-// Voir les top IPs
 app.get('/api/admin/top-ips', requireAdmin, (req, res) => {
   const limit = parseInt(req.query.limit) || 20;
   const sorted = Object.entries(ipLogs.stats)
@@ -738,13 +928,11 @@ app.get('/api/admin/top-ips', requireAdmin, (req, res) => {
   res.json({ total: Object.keys(ipLogs.stats).length, top: sorted });
 });
 
-// Voir les stats d'une IP
 app.get('/api/admin/ip-stats/:ip', requireAdmin, (req, res) => {
   const ip = req.params.ip;
   const stats = ipLogs.stats[ip];
   const banned = blacklist.ips[ip];
 
-  // Trouver les utilisateurs liés à cette IP
   const users = loadUsers();
   const linkedUsers = Object.values(users)
     .filter(u => u.ip === ip)
@@ -768,7 +956,6 @@ app.get('/api/admin/ip-stats/:ip', requireAdmin, (req, res) => {
   });
 });
 
-// Voir la blacklist
 app.get('/api/admin/blacklist', requireAdmin, (req, res) => {
   res.json({
     total: Object.keys(blacklist.ips).length,
@@ -776,10 +963,9 @@ app.get('/api/admin/blacklist', requireAdmin, (req, res) => {
   });
 });
 
-// 🆕 Bannir une IP (avec durée personnalisable)
 app.post('/api/admin/ban/:ip', requireAdmin, (req, res) => {
   const ip = req.params.ip;
-  const duration = req.body?.duration;  // ms, ou "permanent"
+  const duration = req.body?.duration;
   const reason = req.body?.reason || 'Ban manuel admin';
 
   let bannedUntil;
@@ -788,7 +974,7 @@ app.post('/api/admin/ban/:ip', requireAdmin, (req, res) => {
   } else if (typeof duration === 'number' && duration > 0) {
     bannedUntil = Date.now() + duration;
   } else {
-    bannedUntil = Date.now() + BAN_CONFIG.banDurationMs;  // Par défaut 24h
+    bannedUntil = Date.now() + BAN_CONFIG.banDurationMs;
   }
 
   blacklist.ips[ip] = {
@@ -801,7 +987,6 @@ app.post('/api/admin/ban/:ip', requireAdmin, (req, res) => {
   res.json({ success: true, ip, bannedUntil, reason });
 });
 
-// Débannir une IP
 app.post('/api/admin/unban/:ip', requireAdmin, (req, res) => {
   const ip = req.params.ip;
   delete blacklist.ips[ip];
@@ -811,17 +996,18 @@ app.post('/api/admin/unban/:ip', requireAdmin, (req, res) => {
   res.json({ success: true, ip });
 });
 
-// Voir les logs récents
 app.get('/api/admin/logs', requireAdmin, (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 100, 1000);
   const endpoint = req.query.endpoint;
   const country = req.query.country;
   const ip = req.query.ip;
+  const attacksOnly = req.query.attacks === 'true';
 
   let logs = ipLogs.logs;
   if (endpoint) logs = logs.filter(l => l.endpoint === endpoint);
   if (country) logs = logs.filter(l => l.country === country);
   if (ip) logs = logs.filter(l => l.ip === ip);
+  if (attacksOnly) logs = logs.filter(l => l.isAttack === true);
 
   res.json({
     total: logs.length,
@@ -829,12 +1015,12 @@ app.get('/api/admin/logs', requireAdmin, (req, res) => {
   });
 });
 
-// 🆕 Stats par pays
 app.get('/api/admin/countries', requireAdmin, (req, res) => {
   const countries = Object.entries(ipLogs.countries || {})
     .map(([code, data]) => ({
       code,
       count: data.count,
+      attacks: data.attacks || 0,
       uniqueIPs: Object.keys(data.uniqueIPs || {}).length,
       topEndpoint: Object.entries(data.endpoints || {})
         .sort((a, b) => b[1] - a[1])[0]?.[0] || '—',
@@ -850,28 +1036,29 @@ app.get('/api/admin/countries', requireAdmin, (req, res) => {
   });
 });
 
-// 🆕 Stats par endpoint (clics par route)
 app.get('/api/admin/endpoints', requireAdmin, (req, res) => {
   const endpoints = {};
   
-  // Compter depuis les logs
   ipLogs.logs.forEach(log => {
     if (!endpoints[log.endpoint]) {
       endpoints[log.endpoint] = {
         count: 0,
         uniqueIPs: new Set(),
-        methods: {}
+        methods: {},
+        attacks: 0
       };
     }
     endpoints[log.endpoint].count++;
     endpoints[log.endpoint].uniqueIPs.add(log.ip);
     endpoints[log.endpoint].methods[log.method] = (endpoints[log.endpoint].methods[log.method] || 0) + 1;
+    if (log.isAttack) endpoints[log.endpoint].attacks++;
   });
 
   const result = Object.entries(endpoints)
     .map(([ep, data]) => ({
       endpoint: ep,
       count: data.count,
+      attacks: data.attacks,
       uniqueIPs: data.uniqueIPs.size,
       methods: data.methods
     }))
@@ -880,7 +1067,6 @@ app.get('/api/admin/endpoints', requireAdmin, (req, res) => {
   res.json({ total: result.length, endpoints: result });
 });
 
-// 🆕 Liste des utilisateurs couplés
 app.get('/api/admin/users', requireAdmin, (req, res) => {
   const users = loadUsers();
   const list = Object.entries(users).map(([phone, u]) => ({
@@ -892,13 +1078,13 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
     userAgent: u.userAgent || '—',
     createdAt: u.createdAt,
     connectedAt: u.connectedAt || null,
-    code: u.code || null
+    code: u.code || null,
+    hasSessionToken: !!u.sessionToken
   })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
   res.json({ total: list.length, users: list });
 });
 
-// 🆕 Déconnecter un utilisateur par numéro
 app.post('/api/admin/disconnect-user/:phone', requireAdmin, (req, res) => {
   const { phone } = req.params;
   const users = loadUsers();
@@ -916,7 +1102,6 @@ app.post('/api/admin/disconnect-user/:phone', requireAdmin, (req, res) => {
   res.json({ success: true, phone, message: 'Déconnexion en cours...' });
 });
 
-// 🆕 Déconnecter TOUS les utilisateurs d'une IP
 app.post('/api/admin/disconnect-ip/:ip', requireAdmin, (req, res) => {
   const { ip } = req.params;
   const users = loadUsers();
@@ -936,7 +1121,6 @@ app.post('/api/admin/disconnect-ip/:ip', requireAdmin, (req, res) => {
   res.json({ success: true, ip, affected, count: affected.length });
 });
 
-// 🆕 Supprimer définitivement un utilisateur
 app.delete('/api/admin/user/:phone', requireAdmin, (req, res) => {
   const { phone } = req.params;
   const users = loadUsers();
@@ -951,7 +1135,6 @@ app.delete('/api/admin/user/:phone', requireAdmin, (req, res) => {
   res.json({ success: true, phone });
 });
 
-// 🆕 Vue d'ensemble / dashboard
 app.get('/api/admin/overview', requireAdmin, (req, res) => {
   const users = loadUsers();
   const totalUsers = Object.keys(users).length;
@@ -962,16 +1145,23 @@ app.get('/api/admin/overview', requireAdmin, (req, res) => {
   const totalLogs = ipLogs.logs.length;
   const totalCountries = Object.keys(ipLogs.countries || {}).length;
 
-  // Activité des dernières 24h
   const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
   const recentLogs = ipLogs.logs.filter(l => new Date(l.timestamp).getTime() > oneDayAgo);
   const recentUniqueIPs = new Set(recentLogs.map(l => l.ip)).size;
 
-  // Tentatives de bot (user-agent suspect dans les logs)
   const botAttempts = ipLogs.logs.filter(l => {
     const ua = (l.userAgent || '').toLowerCase();
     return SUSPICIOUS_UA.some(p => p.test(ua));
   }).length;
+
+  // 🆕 Attaques des 5 dernières minutes
+  const fiveMinAgo = Date.now() - 5 * 60 * 1000;
+  const recentAttacks = ipLogs.logs.filter(l =>
+    l.isAttack === true && new Date(l.timestamp).getTime() > fiveMinAgo
+  ).length;
+
+  // 🆕 Nombre total d'attaques
+  const totalAttacks = ipLogs.logs.filter(l => l.isAttack === true).length;
 
   res.json({
     totalUsers,
@@ -983,7 +1173,10 @@ app.get('/api/admin/overview', requireAdmin, (req, res) => {
     totalCountries,
     recentUniqueIPs,
     botAttempts,
+    recentAttacks,        // 🆕
+    totalAttacks,         // 🆕
     uptime: Math.floor(process.uptime()),
+    turnstileEnabled: TURNSTILE_ENABLED,   // 🆕
     servers: SERVERS.map(s => ({
       id: s.id,
       name: s.name,
@@ -994,13 +1187,54 @@ app.get('/api/admin/overview', requireAdmin, (req, res) => {
   });
 });
 
+// ==================== 🆕 ROUTE API : ATTAQUES EN COURS ====================
+app.get('/api/admin/attacks', requireAdmin, (req, res) => {
+  const minutes = parseInt(req.query.minutes) || 5;
+  const since = Date.now() - minutes * 60 * 1000;
+
+  const attacks = ipLogs.logs
+    .filter(l => l.isAttack === true && new Date(l.timestamp).getTime() > since)
+    .slice(-200)
+    .reverse();
+
+  // Grouper par IP
+  const byIP = {};
+  attacks.forEach(a => {
+    if (!byIP[a.ip]) {
+      byIP[a.ip] = {
+        ip: a.ip,
+        country: a.country,
+        count: 0,
+        endpoints: {},
+        firstSeen: a.timestamp,
+        lastSeen: a.timestamp,
+        userAgent: a.userAgent
+      };
+    }
+    byIP[a.ip].count++;
+    byIP[a.ip].endpoints[a.endpoint] = (byIP[a.ip].endpoints[a.endpoint] || 0) + 1;
+    byIP[a.ip].lastSeen = a.timestamp;
+  });
+
+  const topAttackers = Object.values(byIP)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20);
+
+  res.json({
+    total: attacks.length,
+    minutes,
+    topAttackers,
+    recentAttacks: attacks.slice(0, 50)
+  });
+});
+
 // ==================== PAGE ADMIN HTML COMPLÈTE ====================
 app.get('/admin', (req, res) => {
   if (!isAdminAuthorized(req)) {
     return res.status(401).send(`
       <html><body style="background:#0a0e1a;color:#fff;font-family:sans-serif;padding:40px;text-align:center;">
-        <h1>🔒 je t'ai eu 🙃</h1>
-        <p> AMATEUR😂\nTROUVE TOI DU TAF MON AMIS, EN PASSANT N'OUBLIE PAS DE T'ABONNER DANS MON CANAL https://t.me/hextechcar </p>
+        <h1>🔒 JE T'AI EU PAUVRE CON 🙃</h1>
+        <p>AMATEUR, MAINTENANT ÉCOUTE MOI BIEN TU VAS T'ABONNER À CE PUTAIN DE CANAL TOUT DE SUITE T.me/hextechcar 🔥</p>
       </body></html>
     `);
   }
@@ -1026,14 +1260,19 @@ app.get('/admin', (req, res) => {
   .card.warning .value { color:#ff9500; }
   .card.danger .value { color:#ff006e; }
   .card.success .value { color:#00ff80; }
+  .card.attack { background:linear-gradient(135deg,rgba(255,0,110,0.1),rgba(255,0,110,0.05)); border-color:rgba(255,0,110,0.3); }
+  .card.attack .value { color:#ff006e; }
   .panel { background:#0f131a; border:1px solid #1e2532; border-radius:12px; padding:20px; margin-bottom:20px; }
   .panel h2 { font-size:1.05rem; color:#fff; margin-bottom:15px; display:flex; align-items:center; gap:8px; justify-content:space-between; flex-wrap:wrap; }
   table { width:100%; border-collapse:collapse; }
   th { text-align:left; padding:10px; background:#080a10; color:#64748b; font-size:0.7rem; text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid #1e2532; }
   td { padding:10px; border-bottom:1px solid #1e2532; font-size:0.8rem; vertical-align:middle; }
   tr:hover { background:rgba(0,200,255,0.03); }
+  tr.attack-row { background:rgba(255,0,110,0.05); }
+  tr.attack-row:hover { background:rgba(255,0,110,0.1); }
   .ip { font-family:monospace; color:#00e5ff; font-weight:600; }
   .count { color:#00ff80; font-weight:700; }
+  .count-attack { color:#ff006e; font-weight:700; }
   .flag { font-size:1rem; margin-right:5px; }
   .btn { padding:6px 12px; border-radius:6px; border:none; cursor:pointer; font-size:0.72rem; font-weight:600; transition:all 0.2s; margin:2px; }
   .btn:hover { transform:translateY(-1px); }
@@ -1054,6 +1293,7 @@ app.get('/admin', (req, res) => {
   .tabs { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
   .tab { padding:10px 16px; background:#1e2532; color:#94a3b8; border-radius:8px; cursor:pointer; font-size:0.82rem; font-weight:600; border:none; transition:all 0.2s; }
   .tab.active { background:#00c8ff; color:#080a10; }
+  .tab.tab-attack.active { background:#ff006e; color:#fff; }
   .tab:hover:not(.active) { background:#2d3748; color:#fff; }
   .tab-content { display:none; }
   .tab-content.active { display:block; }
@@ -1065,6 +1305,7 @@ app.get('/admin', (req, res) => {
   .badge-pending { background:rgba(255,149,0,0.15); color:#ff9500; }
   .badge-disconnected { background:rgba(100,116,139,0.15); color:#94a3b8; }
   .badge-error { background:rgba(255,0,110,0.15); color:#ff006e; }
+  .badge-attack { background:rgba(255,0,110,0.15); color:#ff006e; padding:4px 10px; border-radius:20px; font-size:0.65rem; font-weight:700; }
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center; padding:20px; }
   .modal-overlay.active { display:flex; }
   .modal { background:#0f131a; border:1px solid #1e2532; border-radius:16px; padding:25px; max-width:500px; width:100%; }
@@ -1075,28 +1316,32 @@ app.get('/admin', (req, res) => {
   .modal-actions button { padding:10px 20px; border-radius:8px; border:none; font-weight:600; cursor:pointer; font-size:0.85rem; }
   .btn-cancel { background:#1e2532; color:#e2e8f0; }
   .btn-confirm { background:#ff006e; color:#fff; }
+  .alert-pulse { animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse {
+    0%,100% { opacity:1; }
+    50% { opacity:0.6; }
+  }
 </style>
 </head>
 <body>
 <div class="container">
   <h1>🔐 HEXTECH — Admin Dashboard</h1>
-  <p class="subtitle">Surveillance complète : IPs, bots, pays, clics, utilisateurs</p>
+  <p class="subtitle">Surveillance : IPs, bots, pays, clics, utilisateurs, attaques 🚨</p>
 
-  <!-- CARTES STATS -->
   <div class="cards" id="statsCards">
     <div class="card"><div class="label">IPs uniques</div><div class="value" id="stat-totalIps">—</div></div>
     <div class="card danger"><div class="label">IPs bannies</div><div class="value" id="stat-bannedIps">—</div></div>
     <div class="card warning"><div class="label">Tentatives bot</div><div class="value" id="stat-botAttempts">—</div></div>
+    <div class="card attack"><div class="label">🚨 Attaques 5min</div><div class="value" id="stat-recentAttacks">—</div></div>
     <div class="card"><div class="label">Pays</div><div class="value" id="stat-countries">—</div></div>
     <div class="card success"><div class="label">Utilisateurs</div><div class="value" id="stat-users">—</div></div>
     <div class="card"><div class="label">IPs 24h</div><div class="value" id="stat-recentIPs">—</div></div>
     <div class="card"><div class="label">Logs totaux</div><div class="value" id="stat-logs">—</div></div>
-    <div class="card"><div class="label">Uptime</div><div class="value" id="stat-uptime" style="font-size:1rem">—</div></div>
   </div>
 
-  <!-- ONGLETS -->
   <div class="tabs">
-    <button class="tab active" data-tab="overview">📊 Vue d'ensemble</button>
+    <button class="tab tab-attack active" data-tab="attacks">🚨 Attaques en cours</button>
+    <button class="tab" data-tab="overview">📊 Vue d'ensemble</button>
     <button class="tab" data-tab="top">🏆 Top IPs</button>
     <button class="tab" data-tab="countries">🌍 Pays</button>
     <button class="tab" data-tab="endpoints">📈 Clics</button>
@@ -1105,14 +1350,29 @@ app.get('/admin', (req, res) => {
     <button class="tab" data-tab="banned">🚫 Bannis</button>
   </div>
 
-  <!-- VUE D'ENSEMBLE -->
-  <div class="panel tab-content active" id="tab-overview">
+  <!-- 🆕 ATTAQUES EN COURS -->
+  <div class="panel tab-content active" id="tab-attacks">
+    <h2>
+      🚨 Attaques en cours (dernières 5 min)
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="attackMinutes" onchange="loadAttacks()" style="padding:6px 10px;background:#080a10;border:1px solid #1e2532;border-radius:6px;color:#e2e8f0;font-size:0.8rem">
+          <option value="5">5 min</option>
+          <option value="15">15 min</option>
+          <option value="60">1 heure</option>
+          <option value="1440">24 heures</option>
+        </select>
+        <button class="btn btn-refresh" onclick="loadAttacks()">🔄 Actualiser</button>
+      </div>
+    </h2>
+    <div id="attacksContent"><div class="empty">Chargement...</div></div>
+  </div>
+
+  <div class="panel tab-content" id="tab-overview">
     <h2>📊 Vue d'ensemble</h2>
     <button class="btn btn-refresh" onclick="loadAll()">🔄 Rafraîchir</button>
     <div id="overviewContent"><div class="empty">Chargement...</div></div>
   </div>
 
-  <!-- TOP IPs -->
   <div class="panel tab-content" id="tab-top">
     <h2>🏆 Top IPs les plus actives</h2>
     <div class="filters">
@@ -1122,21 +1382,18 @@ app.get('/admin', (req, res) => {
     <div id="topContent"><div class="empty">Chargement...</div></div>
   </div>
 
-  <!-- PAYS -->
   <div class="panel tab-content" id="tab-countries">
     <h2>🌍 Statistiques par pays</h2>
     <button class="btn btn-refresh" onclick="loadCountries()">🔄 Actualiser</button>
     <div id="countriesContent"><div class="empty">Chargement...</div></div>
   </div>
 
-  <!-- CLICS / ENDPOINTS -->
   <div class="panel tab-content" id="tab-endpoints">
     <h2>📈 Nombre de clics par route</h2>
     <button class="btn btn-refresh" onclick="loadEndpoints()">🔄 Actualiser</button>
     <div id="endpointsContent"><div class="empty">Chargement...</div></div>
   </div>
 
-  <!-- UTILISATEURS -->
   <div class="panel tab-content" id="tab-users">
     <h2>👥 Utilisateurs couplés</h2>
     <div class="filters">
@@ -1146,7 +1403,6 @@ app.get('/admin', (req, res) => {
     <div id="usersContent"><div class="empty">Chargement...</div></div>
   </div>
 
-  <!-- LOGS -->
   <div class="panel tab-content" id="tab-logs">
     <h2>📝 Logs récents</h2>
     <div class="filters">
@@ -1157,13 +1413,15 @@ app.get('/admin', (req, res) => {
         <option value="/api/servers">/api/servers</option>
         <option value="/api/status">/api/status</option>
       </select>
+      <label style="display:flex;align-items:center;gap:5px;color:#94a3b8;font-size:0.8rem">
+        <input type="checkbox" id="logAttacksOnly"> Attaques seulement
+      </label>
       <input type="number" id="logLimit" value="200" min="10" max="1000">
       <button class="btn btn-refresh" onclick="loadLogs()">🔄 Actualiser</button>
     </div>
     <div id="logsContent"><div class="empty">Chargement...</div></div>
   </div>
 
-  <!-- BANNIS -->
   <div class="panel tab-content" id="tab-banned">
     <h2>🚫 IPs bannies</h2>
     <button class="btn btn-refresh" onclick="loadBanned()">🔄 Actualiser</button>
@@ -1171,7 +1429,6 @@ app.get('/admin', (req, res) => {
   </div>
 </div>
 
-<!-- MODALE BAN -->
 <div class="modal-overlay" id="banModal">
   <div class="modal">
     <h3>🚫 Bannir une IP</h3>
@@ -1199,15 +1456,14 @@ app.get('/admin', (req, res) => {
   let currentBanIp = null;
   let allUsers = [];
 
-  // Onglets
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-      // Charger les données de l'onglet
       const t = tab.dataset.tab;
+      if (t === 'attacks') loadAttacks();
       if (t === 'overview') loadOverview();
       if (t === 'top') loadTop();
       if (t === 'countries') loadCountries();
@@ -1245,20 +1501,73 @@ app.get('/admin', (req, res) => {
     return res.json();
   }
 
-  // ---------- VUE D'ENSEMBLE ----------
+  // 🆕 ATTAQUES
+  async function loadAttacks() {
+    try {
+      const minutes = document.getElementById('attackMinutes').value || 5;
+      const data = await fetchAdmin('/api/admin/attacks?minutes=' + minutes);
+      
+      if (!data.topAttackers || data.topAttackers.length === 0) {
+        document.getElementById('attacksContent').innerHTML = '<div class="empty">✅ Aucune attaque détectée sur cette période</div>';
+        return;
+      }
+
+      let html = '<div style="margin-bottom:15px;color:#ff9500;font-size:0.9rem">⚠️ <strong>' + data.total + ' attaques</strong> détectées sur les ' + minutes + ' dernières minutes</div>';
+      
+      // Top attaquants
+      html += '<h3 style="color:#ff006e;font-size:0.95rem;margin:15px 0 10px">🎯 Top Attaquants</h3>';
+      html += '<table><thead><tr><th>#</th><th>IP</th><th>Pays</th><th>Attaques</th><th>Endpoints</th><th>Dernière</th><th>User-Agent</th><th>Actions</th></tr></thead><tbody>';
+      data.topAttackers.forEach((a, i) => {
+        const endpoints = Object.entries(a.endpoints).map(([k,v]) => k + '(' + v + ')').join(', ');
+        html += '<tr class="attack-row">';
+        html += '<td>' + (i+1) + '</td>';
+        html += '<td class="ip">' + a.ip + '</td>';
+        html += '<td><span class="flag">' + getFlagEmoji(a.country) + '</span>' + (a.country || '—') + '</td>';
+        html += '<td class="count-attack">' + a.count + '</td>';
+        html += '<td style="font-family:monospace;font-size:0.7rem">' + endpoints + '</td>';
+        html += '<td style="font-size:0.72rem;color:#94a3b8">' + new Date(a.lastSeen).toLocaleString('fr-FR') + '</td>';
+        html += '<td style="font-size:0.68rem;color:#64748b;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + a.userAgent + '">' + (a.userAgent||'').substring(0,30) + '</td>';
+        html += '<td>';
+        html += '<button class="btn btn-ban" onclick="openBanModal(\\'' + a.ip + '\\')">Bannir</button>';
+        html += '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+
+      // Logs d'attaques récents
+      if (data.recentAttacks && data.recentAttacks.length > 0) {
+        html += '<h3 style="color:#ff006e;font-size:0.95rem;margin:25px 0 10px">📋 Attaques récentes</h3>';
+        html += '<table><thead><tr><th>Heure</th><th>IP</th><th>Pays</th><th>Endpoint</th><th>Méthode</th><th>UA</th></tr></thead><tbody>';
+        data.recentAttacks.slice(0, 30).forEach(a => {
+          html += '<tr class="attack-row">';
+          html += '<td style="font-size:0.7rem;color:#94a3b8">' + new Date(a.timestamp).toLocaleString('fr-FR') + '</td>';
+          html += '<td class="ip">' + a.ip + '</td>';
+          html += '<td><span class="flag">' + getFlagEmoji(a.country) + '</span>' + (a.country || '—') + '</td>';
+          html += '<td style="font-family:monospace;font-size:0.72rem">' + a.endpoint + '</td>';
+          html += '<td>' + a.method + '</td>';
+          html += '<td style="font-size:0.7rem;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (a.userAgent||'') + '">' + (a.userAgent||'—').substring(0,40) + '</td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+      }
+
+      document.getElementById('attacksContent').innerHTML = html;
+    } catch (e) {
+      document.getElementById('attacksContent').innerHTML = '<div class="empty">Erreur: ' + e.message + '</div>';
+    }
+  }
+
   async function loadOverview() {
     try {
       const data = await fetchAdmin('/api/admin/overview');
       document.getElementById('stat-totalIps').textContent = data.totalIPs;
       document.getElementById('stat-bannedIps').textContent = data.bannedIPs;
       document.getElementById('stat-botAttempts').textContent = data.botAttempts;
+      document.getElementById('stat-recentAttacks').textContent = data.recentAttacks || 0;
       document.getElementById('stat-countries').textContent = data.totalCountries;
       document.getElementById('stat-users').textContent = data.connectedUsers + '/' + data.totalUsers;
       document.getElementById('stat-recentIPs').textContent = data.recentUniqueIPs;
       document.getElementById('stat-logs').textContent = data.totalLogs;
-      const u = Math.floor(data.uptime);
-      document.getElementById('stat-uptime').textContent =
-        Math.floor(u / 86400) + 'j ' + Math.floor((u % 86400) / 3600) + 'h ' + Math.floor((u % 3600) / 60) + 'm';
 
       let html = '<table><thead><tr><th>Serveur</th><th>Statut</th><th>CPU</th><th>RAM</th></tr></thead><tbody>';
       data.servers.forEach(s => {
@@ -1276,7 +1585,6 @@ app.get('/admin', (req, res) => {
     }
   }
 
-  // ---------- TOP IPs ----------
   async function loadTop() {
     try {
       const limit = document.getElementById('topLimit').value || 50;
@@ -1299,14 +1607,16 @@ app.get('/admin', (req, res) => {
       document.getElementById('topContent').innerHTML = '<div class="empty">Aucune IP enregistrée</div>';
       return;
     }
-    let html = '<table><thead><tr><th>#</th><th>IP</th><th>Pays</th><th>Requêtes</th><th>Dernière</th><th>Statut</th><th>Actions</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>#</th><th>IP</th><th>Pays</th><th>Requêtes</th><th>Attaques</th><th>Dernière</th><th>Statut</th><th>Actions</th></tr></thead><tbody>';
     list.forEach((item, i) => {
       const date = new Date(item.lastSeen).toLocaleString('fr-FR');
-      html += '<tr>';
+      const isAttacker = item.attacks > 0;
+      html += '<tr' + (isAttacker ? ' class="attack-row"' : '') + '>';
       html += '<td>' + (i+1) + '</td>';
       html += '<td class="ip">' + item.ip + '</td>';
       html += '<td><span class="flag">' + getFlagEmoji(item.country) + '</span>' + (item.country || '—') + '</td>';
       html += '<td class="count">' + item.count + '</td>';
+      html += '<td>' + (isAttacker ? '<span class="count-attack">' + item.attacks + '</span>' : '—') + '</td>';
       html += '<td style="font-size:0.72rem;color:#94a3b8">' + date + '</td>';
       html += '<td>' + (item.blocked ? '<span class="banned">BANNI</span>' : '<span class="ok">OK</span>') + '</td>';
       html += '<td>';
@@ -1316,7 +1626,6 @@ app.get('/admin', (req, res) => {
         html += '<button class="btn btn-ban" onclick="openBanModal(\\'' + item.ip + '\\')">Bannir</button>';
       }
       html += '<button class="btn btn-disconnect" onclick="disconnectIp(\\'' + item.ip + '\\')">Déconnecter</button>';
-      html += '<button class="btn btn-delete" onclick="viewIp(\\'' + item.ip + '\\')">Détails</button>';
       html += '</td>';
       html += '</tr>';
     });
@@ -1324,7 +1633,6 @@ app.get('/admin', (req, res) => {
     document.getElementById('topContent').innerHTML = html;
   }
 
-  // ---------- PAYS ----------
   async function loadCountries() {
     try {
       const data = await fetchAdmin('/api/admin/countries');
@@ -1332,12 +1640,13 @@ app.get('/admin', (req, res) => {
         document.getElementById('countriesContent').innerHTML = '<div class="empty">Aucun pays enregistré</div>';
         return;
       }
-      let html = '<table><thead><tr><th>Pays</th><th>Code</th><th>Requêtes</th><th>IPs uniques</th><th>Endpoint top</th><th>Dernière</th></tr></thead><tbody>';
+      let html = '<table><thead><tr><th>Pays</th><th>Code</th><th>Requêtes</th><th>Attaques</th><th>IPs uniques</th><th>Endpoint top</th><th>Dernière</th></tr></thead><tbody>';
       data.countries.forEach(c => {
-        html += '<tr>';
+        html += '<tr' + (c.attacks > 0 ? ' class="attack-row"' : '') + '>';
         html += '<td><span class="flag">' + getFlagEmoji(c.code) + '</span>' + c.code + '</td>';
         html += '<td style="color:#94a3b8">' + c.code + '</td>';
         html += '<td class="count">' + c.count + '</td>';
+        html += '<td>' + (c.attacks > 0 ? '<span class="count-attack">' + c.attacks + '</span>' : '—') + '</td>';
         html += '<td>' + c.uniqueIPs + '</td>';
         html += '<td style="font-family:monospace;font-size:0.72rem">' + c.topEndpoint + '</td>';
         html += '<td style="font-size:0.72rem;color:#94a3b8">' + new Date(c.lastSeen).toLocaleString('fr-FR') + '</td>';
@@ -1350,7 +1659,6 @@ app.get('/admin', (req, res) => {
     }
   }
 
-  // ---------- ENDPOINTS / CLICS ----------
   async function loadEndpoints() {
     try {
       const data = await fetchAdmin('/api/admin/endpoints');
@@ -1358,12 +1666,13 @@ app.get('/admin', (req, res) => {
         document.getElementById('endpointsContent').innerHTML = '<div class="empty">Aucun clic enregistré</div>';
         return;
       }
-      let html = '<table><thead><tr><th>Endpoint</th><th>Nombre de clics</th><th>IPs uniques</th><th>Méthodes</th></tr></thead><tbody>';
+      let html = '<table><thead><tr><th>Endpoint</th><th>Clics</th><th>Attaques</th><th>IPs uniques</th><th>Méthodes</th></tr></thead><tbody>';
       data.endpoints.forEach(e => {
         const methods = Object.entries(e.methods).map(([m, c]) => m + ': ' + c).join(', ');
-        html += '<tr>';
+        html += '<tr' + (e.attacks > 0 ? ' class="attack-row"' : '') + '>';
         html += '<td style="font-family:monospace;color:#00e5ff">' + e.endpoint + '</td>';
         html += '<td class="count">' + e.count + '</td>';
+        html += '<td>' + (e.attacks > 0 ? '<span class="count-attack">' + e.attacks + '</span>' : '—') + '</td>';
         html += '<td>' + e.uniqueIPs + '</td>';
         html += '<td style="font-size:0.72rem;color:#94a3b8">' + methods + '</td>';
         html += '</tr>';
@@ -1375,7 +1684,6 @@ app.get('/admin', (req, res) => {
     }
   }
 
-  // ---------- UTILISATEURS ----------
   async function loadUsers() {
     try {
       const data = await fetchAdmin('/api/admin/users');
@@ -1399,7 +1707,7 @@ app.get('/admin', (req, res) => {
       document.getElementById('usersContent').innerHTML = '<div class="empty">Aucun utilisateur</div>';
       return;
     }
-    let html = '<table><thead><tr><th>Numéro</th><th>Serveur</th><th>Statut</th><th>IP</th><th>Pays</th><th>Créé</th><th>Actions</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>Numéro</th><th>Serveur</th><th>Statut</th><th>IP</th><th>Pays</th><th>Token</th><th>Créé</th><th>Actions</th></tr></thead><tbody>';
     list.forEach(u => {
       const badge = u.status === 'connected' ? 'badge-connected' :
                     u.status === 'pending' ? 'badge-pending' :
@@ -1410,6 +1718,7 @@ app.get('/admin', (req, res) => {
       html += '<td><span class="badge ' + badge + '">' + u.status + '</span></td>';
       html += '<td style="font-family:monospace;font-size:0.72rem">' + (u.ip || '—') + '</td>';
       html += '<td><span class="flag">' + getFlagEmoji(u.country) + '</span>' + (u.country || '—') + '</td>';
+      html += '<td>' + (u.hasSessionToken ? '🔐' : '⚠️') + '</td>';
       html += '<td style="font-size:0.7rem;color:#94a3b8">' + (u.createdAt ? new Date(u.createdAt).toLocaleString('fr-FR') : '—') + '</td>';
       html += '<td>';
       if (u.status !== 'disconnected') {
@@ -1423,30 +1732,32 @@ app.get('/admin', (req, res) => {
     document.getElementById('usersContent').innerHTML = html;
   }
 
-  // ---------- LOGS ----------
   async function loadLogs() {
     try {
       const limit = document.getElementById('logLimit').value || 200;
       const ipFilter = document.getElementById('logIpFilter').value;
       const epFilter = document.getElementById('logEndpointFilter').value;
+      const attacksOnly = document.getElementById('logAttacksOnly').checked;
       let url = '/api/admin/logs?limit=' + limit;
       if (ipFilter) url += '&ip=' + encodeURIComponent(ipFilter);
       if (epFilter) url += '&endpoint=' + encodeURIComponent(epFilter);
+      if (attacksOnly) url += '&attacks=true';
       const data = await fetchAdmin(url);
       if (!data.logs || data.logs.length === 0) {
         document.getElementById('logsContent').innerHTML = '<div class="empty">Aucun log</div>';
         return;
       }
-      let html = '<table><thead><tr><th>Heure</th><th>IP</th><th>Pays</th><th>Méthode</th><th>Endpoint</th><th>User-Agent</th></tr></thead><tbody>';
+      let html = '<table><thead><tr><th>Heure</th><th>IP</th><th>Pays</th><th>Méthode</th><th>Endpoint</th><th>UA</th><th>Type</th></tr></thead><tbody>';
       data.logs.forEach(log => {
         const date = new Date(log.timestamp).toLocaleString('fr-FR');
-        html += '<tr>';
+        html += '<tr' + (log.isAttack ? ' class="attack-row"' : '') + '>';
         html += '<td style="font-size:0.7rem;color:#94a3b8">' + date + '</td>';
         html += '<td class="ip">' + log.ip + '</td>';
         html += '<td><span class="flag">' + getFlagEmoji(log.country) + '</span>' + (log.country || '—') + '</td>';
         html += '<td>' + log.method + '</td>';
         html += '<td style="font-family:monospace;font-size:0.72rem">' + log.endpoint + '</td>';
-        html += '<td style="font-size:0.7rem;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (log.userAgent||'') + '">' + (log.userAgent||'—').substring(0,60) + '</td>';
+        html += '<td style="font-size:0.7rem;color:#64748b;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (log.userAgent||'') + '">' + (log.userAgent||'—').substring(0,50) + '</td>';
+        html += '<td>' + (log.isAttack ? '<span class="badge-attack">🚨 Attaque</span>' : '<span class="ok">✓</span>') + '</td>';
         html += '</tr>';
       });
       html += '</tbody></table>';
@@ -1456,7 +1767,6 @@ app.get('/admin', (req, res) => {
     }
   }
 
-  // ---------- BANNIS ----------
   async function loadBanned() {
     try {
       const data = await fetchAdmin('/api/admin/blacklist');
@@ -1485,7 +1795,6 @@ app.get('/admin', (req, res) => {
     }
   }
 
-  // ---------- ACTIONS ----------
   function openBanModal(ip) {
     currentBanIp = ip;
     document.getElementById('banModalIp').textContent = ip;
@@ -1544,36 +1853,21 @@ app.get('/admin', (req, res) => {
     } catch(e) { alert('Erreur: ' + e.message); }
   }
 
-  async function viewIp(ip) {
-    try {
-      const data = await fetchAdmin('/api/admin/ip-stats/' + ip);
-      const s = data.stats || {};
-      const endpoints = Object.entries(s.endpoints || {}).map(([k,v]) => k + ': ' + v).join('\\n');
-      const linkedUsers = (data.linkedUsers || []).map(u => '+' + u.phone + ' (' + u.status + ')').join('\\n');
-      let msg = 'IP: ' + ip + '\\n';
-      msg += 'Pays: ' + (s.country || '—') + '\\n';
-      msg += 'Requêtes: ' + (s.count || 0) + '\\n';
-      msg += 'Première visite: ' + (s.firstSeen ? new Date(s.firstSeen).toLocaleString('fr-FR') : '—') + '\\n';
-      msg += 'Dernière visite: ' + (s.lastSeen ? new Date(s.lastSeen).toLocaleString('fr-FR') : '—') + '\\n\\n';
-      msg += 'Utilisateurs liés:\\n' + (linkedUsers || 'aucun') + '\\n\\n';
-      msg += 'Endpoints:\\n' + (endpoints || 'aucun');
-      alert(msg);
-    } catch(e) { alert('Erreur: ' + e.message); }
-  }
-
-  // ---------- CHARGEMENT INITIAL ----------
   async function loadAll() {
     await loadOverview();
     await loadTop();
   }
 
-  loadAll();
+  // Charger attaques + overview au démarrage
+  loadAttacks();
+  loadOverview();
   setInterval(() => {
-    // Auto-refresh seulement la vue d'ensemble et top
-    loadOverview();
-  }, 15000);
+    // Auto-refresh attaques et overview
+    const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+    if (activeTab === 'attacks') loadAttacks();
+    if (activeTab === 'overview') loadOverview();
+  }, 10000);
 
-  // Fermer modal si clic sur overlay
   document.getElementById('banModal').addEventListener('click', e => {
     if (e.target.id === 'banModal') closeBanModal();
   });
@@ -1685,9 +1979,15 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   • Rate-limit global : ${RATE_LIMIT.global.max} req/min`);
   console.log(`   • Rate-limit /pair  : ${RATE_LIMIT.pair.max} req/min`);
   console.log(`   • Ban auto après    : ${BAN_CONFIG.maxViolations} violations`);
+  console.log(`   • Anti-énumération  : max ${ENUM_CONFIG.maxDistinctPhones} numéros/h par IP`);
+  console.log(`   • Session token     : REQUIS sur /status et /disconnect`);
+  console.log(`   • Turnstile         : ${TURNSTILE_ENABLED ? '✅ ACTIVÉ' : '⚠️ DÉSACTIVÉ'}`);
   console.log(`   • API Key           : ${API_KEY.substring(0, 8)}...`);
   console.log(`   • Admin Key         : ${ADMIN_KEY.substring(0, 8)}...`);
   console.log(`   • Trust proxy       : ${TRUST_PROXY}`);
+  console.log('────────────────────────────────────────');
+  console.log(`🧹 Stats exclues :`);
+  STATS_EXCLUDED_PATHS.forEach(p => console.log(`   • ${p}*`));
   console.log('────────────────────────────────────────');
   console.log(`🔐 Page admin : /admin?key=${ADMIN_KEY.substring(0,8)}...`);
   console.log('════════════════════════════════════════');
