@@ -6,8 +6,6 @@
   <title>HEXTECH — Dashboard de Couplage</title>
   <!-- 📊 LIBRAIRIE CHART.JS POUR LE GRAPHIQUE DE COURBES -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- 🆕 LIBRAIRIE CLOUDFLARE TURNSTILE (CAPTCHA) -->
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
   <style>
     /* ⚡ RESET & BASE */
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
@@ -19,86 +17,15 @@
       padding: 20px;
       display: flex;
       justify-content: center;
-      position: relative;
-      overflow-x: hidden;
     }
 
-    /* 🆕 ANIMATION TECHNOLOGIQUE DARK BLUE EN ARRIÈRE-PLAN */
-    #techBackground {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 0;
-      pointer-events: none;
-      background: radial-gradient(ellipse at center, #0a1428 0%, #060810 70%, #04060c 100%);
-    }
-
-    /* 🆕 WRAPPER PRINCIPAL : empile le titre PUIS le dashboard verticalement */
-    .main-wrapper {
+    /* 📦 LAYOUT PRINCIPAL */
+    .dashboard {
       width: 100%;
       max-width: 1200px;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      position: relative;
-      z-index: 1;
-    }
-
-    /* 🆕 TITRE HEXTECH GÉANT EN HAUT, CENTRÉ, DÉGRADÉ BLEU */
-    .hero-title {
-      width: 100%;
-      text-align: center;
-      padding: 20px 10px 30px;
-      position: relative;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    .hero-title h1 {
-      font-size: clamp(2.5rem, 12vw, 7rem);
-      font-weight: 900;
-      letter-spacing: 4px;
-      line-height: 1;
-      background: linear-gradient(135deg, #00c8ff 0%, #4a90ff 35%, #7b2ff7 70%, #00e5ff 100%);
-      background-size: 200% 200%;
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
-      color: transparent;
-      text-transform: uppercase;
-      animation: gradientMove 6s ease infinite;
-      filter: drop-shadow(0 0 25px rgba(0, 200, 255, 0.35));
-      font-family: 'Inter', sans-serif;
-      white-space: nowrap;
-      max-width: 100%;
-    }
-    @keyframes gradientMove {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-    .hero-title .hero-glow {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 70%;
-      height: 100%;
-      background: radial-gradient(ellipse, rgba(0, 200, 255, 0.15) 0%, transparent 70%);
-      filter: blur(40px);
-      pointer-events: none;
-      z-index: -1;
-    }
-
-    /* 📦 LAYOUT PRINCIPAL (DASHBOARD) */
-    .dashboard {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
       gap: 20px;
-      position: relative;
     }
 
     /* 🟢 HEADER */
@@ -473,27 +400,6 @@
     .checkbox-group { display: flex; gap: 10px; align-items: flex-start; font-size: 0.8rem; color: #94a3b8; }
     .checkbox-group input { margin-top: 3px; accent-color: #00c8ff; }
 
-    /* 🆕 TURNSTILE CONTAINER */
-    .turnstile-container {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 65px;
-      padding: 4px;
-      border-radius: 8px;
-      background: rgba(0, 200, 255, 0.03);
-      border: 1px dashed rgba(0, 200, 255, 0.15);
-      transition: border-color 0.25s ease, background 0.25s ease;
-    }
-    .turnstile-container.verified {
-      border-color: rgba(0, 255, 128, 0.4);
-      background: rgba(0, 255, 128, 0.03);
-    }
-    .turnstile-container.error {
-      border-color: rgba(255, 0, 110, 0.4);
-      background: rgba(255, 0, 110, 0.03);
-    }
-
     .btn-submit {
       background: linear-gradient(135deg, #00c8ff 0%, #7b2ff7 100%);
       color: #ffffff; border: none; padding: 15px; border-radius: 8px;
@@ -588,165 +494,141 @@
       letter-spacing: 1px;
     }
 
-    /* 📱 RESPONSIVE MOBILE */
     @media (max-width: 600px) {
-      body { padding: 12px; }
       .footer { flex-direction: column; align-items: stretch; text-align: center; }
       .footer-socials { justify-content: center; }
       .footer-credit { text-align: center; }
-      .hero-title { padding: 10px 5px 20px; }
-      .hero-title h1 { letter-spacing: 2px; }
-      .stats-container { width: 100%; justify-content: space-between; }
-      .stat-card { flex: 1; }
     }
   </style>
 </head>
 <body>
 
-  <!-- 🆕 CANVAS D'ANIMATION TECHNOLOGIQUE DARK BLUE -->
-  <canvas id="techBackground"></canvas>
+  <div class="dashboard">
+    
+    <!-- HEADER -->
+    <header class="header">
+      <div class="top-left-bar">
+        <!-- 🆕 BOUTON EN SAVOIR PLUS -->
+        <button class="btn-about" id="btnAbout" type="button">
+          <span class="icon-info">i</span>
+          En savoir plus
+        </button>
+        <div>
+          <h1>HEXTECH <span>👋</span></h1>
+          <p>Vérifiez l'état des serveurs et générez votre code de couplage.</p>
+        </div>
+      </div>
+      <div class="stats-container">
+        <div class="stat-card">
+          <div class="stat-icon" style="color:#00c8ff">🖥️</div>
+          <div class="stat-info">
+            <span class="stat-value" id="activeServers">0</span>
+            <span class="stat-label">Serveurs actifs</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="color:#00ff80">👥</div>
+          <div class="stat-info">
+            <span class="stat-value" id="totalUsers">0</span>
+            <span class="stat-label">Utilisateurs liés</span>
+          </div>
+        </div>
+      </div>
+    </header>
 
-  <!-- 🆕 WRAPPER : titre PUIS dashboard, empilés verticalement -->
-  <div class="main-wrapper">
+    <!-- GRILLE DES 4 SERVEURS -->
+    <section class="servers-grid" id="serversGrid">
+      <!-- Les cartes seront injectées par Javascript -->
+    </section>
 
-    <!-- 🆕 TITRE HEXTECH GÉANT EN HAUT, CENTRÉ, DÉGRADÉ BLEU -->
-    <div class="hero-title">
-      <span class="hero-glow"></span>
-      <h1>HEXTECH</h1>
-    </div>
+    <!-- SECTION DU BAS (GRAPHIQUE RÉEL + ACTIVITÉ RÉELLE) -->
+    <section class="bottom-section">
+      <div class="panel">
+        <div class="panel-title">
+          Utilisation des ressources (Temps réel)
+          <div class="panel-legend">
+            <span class="legend-item"><span class="dot dot-green"></span> CPU</span>
+            <span class="legend-item"><span class="dot dot-blue"></span> RAM</span>
+            <span class="legend-item"><span class="dot dot-purple"></span> Disque</span>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="realtimeChart"></canvas>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Activité récente</div>
+        <div class="activity-list" id="activityList">
+          <div class="activity-item">
+            <div class="activity-dot" style="background:#64748b"></div>
+            <span class="activity-text">En attente de données...</span>
+          </div>
+        </div>
+      </div>
+    </section>
 
-    <div class="dashboard">
+    <!-- FORMULAIRE DE COUPLAGE -->
+    <section class="form-panel" id="formPanel" style="display: none;">
+      <h2>🔗 Couplage sur le <span id="selectedServerName">Serveur 1</span></h2>
+      <p>Entrez votre numéro WhatsApp pour recevoir le code de couplage.</p>
       
-      <!-- HEADER -->
-      <header class="header">
-        <div class="top-left-bar">
-          <!-- 🆕 BOUTON EN SAVOIR PLUS -->
-          <button class="btn-about" id="btnAbout" type="button">
-            <span class="icon-info">i</span>
-            En savoir plus
-          </button>
-          <div>
-            <h1>𝗛𝗘𝗫𝗧𝗘𝗖𝗛 <span>🌐</span></h1>
-            <p>Vérifiez l'état des serveurs et générez votre code de couplage.</p>
-          </div>
+      <input type="tel" id="phone" placeholder="243XXXXXXXXX" maxlength="15" pattern="[0-9]+">
+      
+      <div class="checkbox-group">
+        <input type="checkbox" id="consent">
+        <label for="consent">Je consens à coupler mon numéro. je peux me déconnecter à tout moment.</label>
+      </div>
+
+      <button class="btn-submit" id="pairBtn" disabled>Générer le code de couplage</button>
+      
+      <div class="error-msg" id="errorMsg"></div>
+      <div class="info-msg" id="infoMsg"></div>
+
+      <div class="result-box" id="resultBox">
+        <div style="font-size: 0.9rem; color: #00c8ff; text-transform: uppercase; letter-spacing: 2px;">Votre code de couplage</div>
+        <div class="code-display" id="codeDisplay">---</div>
+        <p style="font-size: 0.8rem; color: #64748b; line-height: 1.6;">
+          1. Ouvrez WhatsApp <br> 2. Paramètres → Appareils liés <br> 3. Lier un appareil → Lier avec un numéro <br> 4. Entrez le code ci-dessus
+        </p>
+        <div class="action-buttons">
+          <button class="btn-check" onclick="checkStatus()">🔄 Vérifier statut</button>
+          <button class="btn-disconnect" onclick="disconnect()">🚪 Déconnecter</button>
         </div>
-        <div class="stats-container">
-          <div class="stat-card">
-            <div class="stat-icon" style="color:#00c8ff">🖥️</div>
-            <div class="stat-info">
-              <span class="stat-value" id="activeServers">0</span>
-              <span class="stat-label">Serveurs actifs</span>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon" style="color:#00ff80">👥</div>
-            <div class="stat-info">
-              <span class="stat-value" id="totalUsers">0</span>
-              <span class="stat-label">Utilisateurs liés</span>
-            </div>
-          </div>
-        </div>
-      </header>
+      </div>
+    </section>
 
-      <!-- GRILLE DES 4 SERVEURS -->
-      <section class="servers-grid" id="serversGrid">
-        <!-- Les cartes seront injectées par Javascript -->
-      </section>
+    <!-- 🆕 FOOTER : TELEGRAM + WHATSAPP + CREDIT -->
+    <footer class="footer">
+      <div class="footer-socials">
+        <!-- LOGO TELEGRAM -->
+        <a class="social-btn telegram" href="https://t.me/hextechcar" target="_blank" rel="noopener noreferrer" title="Rejoindre le canal Telegram">
+          <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+          </svg>
+          Canal Telegram
+        </a>
 
-      <!-- SECTION DU BAS (GRAPHIQUE RÉEL + ACTIVITÉ RÉELLE) -->
-      <section class="bottom-section">
-        <div class="panel">
-          <div class="panel-title">
-            ressources ♻️
-            <div class="panel-legend">
-              <span class="legend-item"><span class="dot dot-green"></span> CPU</span>
-              <span class="legend-item"><span class="dot dot-blue"></span> RAM</span>
-              <span class="legend-item"><span class="dot dot-purple"></span> Disque</span>
-            </div>
-          </div>
-          <div class="chart-container">
-            <canvas id="realtimeChart"></canvas>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-title">Activité récente</div>
-          <div class="activity-list" id="activityList">
-            <div class="activity-item">
-              <div class="activity-dot" style="background:#64748b"></div>
-              <span class="activity-text">En attente de données...</span>
-            </div>
-          </div>
-        </div>
-      </section>
+        <!-- BOUTON CHAÎNE WHATSAPP -->
+        <a class="social-btn whatsapp" href="https://whatsapp.com/channel/hextech" target="_blank" rel="noopener noreferrer" title="Rejoindre la chaîne WhatsApp">
+          <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>
+          </svg>
+          Chaîne WhatsApp
+        </a>
+      </div>
 
-      <!-- FORMULAIRE DE COUPLAGE -->
-      <section class="form-panel" id="formPanel" style="display: none;">
-        <h2>🔗 Couplage sur le <span id="selectedServerName">Serveur 1</span></h2>
-        <p>Entrez votre numéro WhatsApp pour recevoir le code de couplage.</p>
-        
-        <input type="tel" id="phone" placeholder="243XXXXXXXXX" maxlength="15" pattern="[0-9]+">
-        
-        <div class="checkbox-group">
-          <input type="checkbox" id="consent">
-          <label for="consent">Je consens à coupler mon numéro. je peux me déconnecter à tout moment.</label>
-        </div>
+      <div class="footer-credit">
+        Développé par <strong>HEXTECH</strong>
+      </div>
+    </footer>
 
-        <!-- 🆕 TURNSTILE CAPTCHA (CLOUDFLARE) -->
-        <div class="turnstile-container" id="turnstileContainer">
-          <div id="turnstileWidget"></div>
-        </div>
-
-        <button class="btn-submit" id="pairBtn" disabled>Générer le code de couplage</button>
-        
-        <div class="error-msg" id="errorMsg"></div>
-        <div class="info-msg" id="infoMsg"></div>
-
-        <div class="result-box" id="resultBox">
-          <div style="font-size: 0.9rem; color: #00c8ff; text-transform: uppercase; letter-spacing: 2px;">Votre code de couplage</div>
-          <div class="code-display" id="codeDisplay">---</div>
-          <p style="font-size: 0.8rem; color: #64748b; line-height: 1.6;">
-            1. Ouvrez WhatsApp <br> 2. Paramètres → Appareils liés <br> 3. Lier un appareil → Lier avec un numéro <br> 4. Entrez le code ci-dessus
-          </p>
-          <div class="action-buttons">
-            <button class="btn-check" onclick="checkStatus()">🔄 Vérifier statut</button>
-            <button class="btn-disconnect" onclick="disconnect()">🚪 Déconnecter</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- 🆕 FOOTER : TELEGRAM + WHATSAPP + CREDIT -->
-      <footer class="footer">
-        <div class="footer-socials">
-          <!-- LOGO TELEGRAM -->
-          <a class="social-btn telegram" href="https://t.me/hextechcar" target="_blank" rel="noopener noreferrer" title="Rejoindre le canal Telegram">
-            <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
-            </svg>
-            Canal Telegram
-          </a>
-
-          <!-- BOUTON CHAÎNE WHATSAPP -->
-          <a class="social-btn whatsapp" href="https://whatsapp.com/channel/0029VbBQb5b4Y9lwZ27BCn0o" target="_blank" rel="noopener noreferrer" title="Rejoindre la chaîne WhatsApp">
-            <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>
-            </svg>
-            Chaîne WhatsApp
-          </a>
-        </div>
-
-        <div class="footer-credit">
-          Développé par <strong>HEXTECH</strong>
-        </div>
-      </footer>
-
-    </div>
   </div>
 
   <!-- 🆕 MODALE EN SAVOIR PLUS (BAILEY) -->
   <div class="about-overlay" id="aboutOverlay">
     <div class="about-modal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
       <h2 id="aboutTitle">
-        🤖 WhatsApp Bot
+        🤖 Bot Bailey
         <span class="badge-ai">IA</span>
       </h2>
       <p class="about-subtitle">
@@ -757,7 +639,7 @@
       <div class="about-section">
         <h3>📌 Définition</h3>
         <p>
-          Bailey est un bot WhatsApp  avec 608 commandes intégré basé sur une architecture multi-appareils moderne. Il se couple à votre numéro via un code sécurisé, puis agit comme un assistant autonome capable de gérer des conversations, d'exécuter des commandes, de modérer des groupes et d'intégrer des services tiers — le tout sans interrompre votre utilisation normale de WhatsApp.
+          Bailey est un bot WhatsApp basé sur une architecture multi-appareils moderne. Il se couple à votre numéro via un code sécurisé, puis agit comme un assistant autonome capable de gérer des conversations, d'exécuter des commandes, de modérer des groupes et d'intégrer des services tiers — le tout sans interrompre votre utilisation normale de WhatsApp.
         </p>
       </div>
 
@@ -835,22 +717,14 @@
   </div>
 
   <script>
-    // ==================== 🔒 CONFIGURATION SÉCURISÉE ====================
-    // ⚠️ IMPORTANT : Pointe vers ton Worker Cloudflare (qui relaiera vers Render)
-    // Si tu n'as pas encore ton Worker, mets temporairement l'URL Render.
-    const API_URL = 'https://last-judment.onrender.com/'; 
-    // 🆕 Exemple une fois le Worker déployé :
-    // const API_URL = 'https://api.heutech.com';
-
-    // 🆕 CLÉ SITE TURNSTILE (à remplacer par ta vraie clé depuis Cloudflare)
-    const TURNSTILE_SITE_KEY = '0x4AAAAAAAxxxxxxxxxxxxxxxxxxxx';
+    // ⚠️ Si le site et le serveur sont sur le même domaine, laisse vide.
+    // Sinon, mets l'URL de ton serveur Render (ex: 'https://last-judment.onrender.com')
+    const API_URL = ''; 
 
     let currentPhone = null;
     let currentCode = null;
     let selectedServerId = null;
     let currentServers = [];
-    let turnstileToken = null;      // 🆕 Token Turnstile courant
-    let turnstileWidgetId = null;   // 🆕 ID du widget Turnstile
 
     // Références DOM
     const serversGrid = document.getElementById('serversGrid');
@@ -870,9 +744,6 @@
     const aboutOverlay = document.getElementById('aboutOverlay');
     const btnCloseAbout = document.getElementById('btnCloseAbout');
 
-    // 🆕 RÉFÉRENCE TURNSTILE
-    const turnstileContainer = document.getElementById('turnstileContainer');
-
     // 🆕 OUVERTURE / FERMETURE DE LA MODALE
     function openAbout() {
       aboutOverlay.classList.add('active');
@@ -891,179 +762,10 @@
       if (e.key === 'Escape' && aboutOverlay.classList.contains('active')) closeAbout();
     });
 
-    // 🆕 ==================== TURNSTILE CAPTCHA (CLOUDFLARE) ====================
-    // Initialisation après chargement du script Turnstile
-    function initTurnstile() {
-      if (typeof turnstile === 'undefined') {
-        // Retry si le script n'est pas encore chargé
-        setTimeout(initTurnstile, 300);
-        return;
-      }
-
-      try {
-        turnstileWidgetId = turnstile.render('#turnstileWidget', {
-          sitekey: TURNSTILE_SITE_KEY,
-          theme: 'dark',
-          size: 'normal',
-          callback: function(token) {
-            turnstileToken = token;
-            turnstileContainer.classList.add('verified');
-            turnstileContainer.classList.remove('error');
-            updateBtn();
-          },
-          'error-callback': function() {
-            turnstileToken = null;
-            turnstileContainer.classList.add('error');
-            turnstileContainer.classList.remove('verified');
-            showError('Captcha échoué. Veuillez réessayer.');
-            updateBtn();
-          },
-          'expired-callback': function() {
-            turnstileToken = null;
-            turnstileContainer.classList.remove('verified');
-            updateBtn();
-          }
-        });
-      } catch (e) {
-        console.error('Erreur initialisation Turnstile:', e);
-      }
-    }
-
-    // Réinitialise le Turnstile après usage
-    function resetTurnstile() {
-      turnstileToken = null;
-      turnstileContainer.classList.remove('verified', 'error');
-      if (typeof turnstile !== 'undefined' && turnstileWidgetId !== null) {
-        try {
-          turnstile.reset(turnstileWidgetId);
-        } catch (e) {
-          console.warn('Erreur reset Turnstile:', e);
-        }
-      }
-    }
-
-    // Lancer l'init quand la page est prête
-    window.addEventListener('load', () => {
-      setTimeout(initTurnstile, 500);
-    });
-
-    // 🆕 ==================== ANIMATION TECHNOLOGIQUE DARK BLUE ====================
-    (function initTechBackground() {
-      const canvas = document.getElementById('techBackground');
-      const ctxBg = canvas.getContext('2d');
-      let width, height;
-      let particles = [];
-      const PARTICLE_COUNT = 80;
-      const MAX_DISTANCE = 150;
-      const COLORS = ['#00c8ff', '#1e6fff', '#0a4a99', '#00e5ff', '#3a7bd5'];
-
-      function resize() {
-        width = canvas.width = window.innerWidth;
-        height = canvas.height = window.innerHeight;
-      }
-
-      function createParticles() {
-        particles = [];
-        for (let i = 0; i < PARTICLE_COUNT; i++) {
-          particles.push({
-            x: Math.random() * width,
-            y: Math.random() * height,
-            vx: (Math.random() - 0.5) * 0.5,
-            vy: (Math.random() - 0.5) * 0.5,
-            radius: Math.random() * 2 + 1,
-            color: COLORS[Math.floor(Math.random() * COLORS.length)],
-            alpha: Math.random() * 0.6 + 0.3
-          });
-        }
-      }
-
-      let gridOffset = 0;
-
-      function drawGrid() {
-        ctxBg.save();
-        ctxBg.strokeStyle = 'rgba(0, 120, 255, 0.08)';
-        ctxBg.lineWidth = 1;
-        
-        const gridSize = 60;
-        for (let x = 0; x < width; x += gridSize) {
-          ctxBg.beginPath();
-          ctxBg.moveTo(x, 0);
-          ctxBg.lineTo(x, height);
-          ctxBg.stroke();
-        }
-        for (let y = -gridSize + (gridOffset % gridSize); y < height; y += gridSize) {
-          ctxBg.beginPath();
-          ctxBg.moveTo(0, y);
-          ctxBg.lineTo(width, y);
-          ctxBg.stroke();
-        }
-        ctxBg.restore();
-      }
-
-      function drawParticles() {
-        for (let i = 0; i < particles.length; i++) {
-          const p = particles[i];
-          
-          p.x += p.vx;
-          p.y += p.vy;
-          
-          if (p.x < 0 || p.x > width) p.vx *= -1;
-          if (p.y < 0 || p.y > height) p.vy *= -1;
-          
-          ctxBg.beginPath();
-          ctxBg.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-          ctxBg.fillStyle = p.color;
-          ctxBg.globalAlpha = p.alpha;
-          ctxBg.fill();
-          
-          ctxBg.beginPath();
-          ctxBg.arc(p.x, p.y, p.radius * 3, 0, Math.PI * 2);
-          ctxBg.fillStyle = p.color;
-          ctxBg.globalAlpha = p.alpha * 0.15;
-          ctxBg.fill();
-          
-          for (let j = i + 1; j < particles.length; j++) {
-            const p2 = particles[j];
-            const dx = p.x - p2.x;
-            const dy = p.y - p2.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            
-            if (dist < MAX_DISTANCE) {
-              const opacity = (1 - dist / MAX_DISTANCE) * 0.35;
-              ctxBg.beginPath();
-              ctxBg.moveTo(p.x, p.y);
-              ctxBg.lineTo(p2.x, p2.y);
-              ctxBg.strokeStyle = `rgba(0, 150, 255, ${opacity})`;
-              ctxBg.lineWidth = 0.8;
-              ctxBg.globalAlpha = 1;
-              ctxBg.stroke();
-            }
-          }
-        }
-        ctxBg.globalAlpha = 1;
-      }
-
-      function animate() {
-        ctxBg.clearRect(0, 0, width, height);
-        drawGrid();
-        drawParticles();
-        gridOffset += 0.3;
-        requestAnimationFrame(animate);
-      }
-
-      window.addEventListener('resize', () => {
-        resize();
-        createParticles();
-      });
-
-      resize();
-      createParticles();
-      animate();
-    })();
-
     // 📊 INITIALISATION DU GRAPHIQUE CHART.JS
     const ctx = document.getElementById('realtimeChart').getContext('2d');
     
+    // Création des dégradés pour les courbes
     const gradientCpu = ctx.createLinearGradient(0, 0, 0, 180);
     gradientCpu.addColorStop(0, 'rgba(0, 255, 128, 0.4)');
     gradientCpu.addColorStop(1, 'rgba(0, 255, 128, 0)');
@@ -1079,7 +781,7 @@
     const realtimeChart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: Array(20).fill(''),
+        labels: Array(20).fill(''), // 20 points d'historique
         datasets: [
           {
             label: 'CPU',
@@ -1087,7 +789,7 @@
             borderColor: '#00ff80',
             backgroundColor: gradientCpu,
             borderWidth: 2,
-            tension: 0.4,
+            tension: 0.4, // Courbe lisse
             fill: true,
             pointRadius: 0
           },
@@ -1116,12 +818,12 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        animation: { duration: 0 },
+        animation: { duration: 0 }, // Pas d'animation pour un rendu instantané
         plugins: {
-          legend: { display: false }
+          legend: { display: false } // On utilise notre propre légende HTML
         },
         scales: {
-          x: { display: false },
+          x: { display: false }, // On cache les axes X
           y: {
             beginAtZero: true,
             max: 100,
@@ -1132,7 +834,9 @@
       }
     });
 
+    // Fonction pour mettre à jour le graphique avec les vraies données
     function updateChart(cpu, ram, disk) {
+      // Ajoute la nouvelle valeur et retire la plus ancienne
       realtimeChart.data.datasets[0].data.push(cpu);
       realtimeChart.data.datasets[0].data.shift();
       
@@ -1145,28 +849,10 @@
       realtimeChart.update();
     }
 
-    // 🆕 ==================== FETCH AVEC TIMEOUT ====================
-    async function safeFetch(url, options = {}, timeoutMs = 15000) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-      try {
-        const res = await fetch(url, { ...options, signal: controller.signal });
-        clearTimeout(timeoutId);
-        return res;
-      } catch (e) {
-        clearTimeout(timeoutId);
-        if (e.name === 'AbortError') {
-          throw new Error('Délai d\'attente dépassé. Réessayez.');
-        }
-        throw new Error('Impossible de contacter le serveur. Vérifiez votre connexion.');
-      }
-    }
-
     // 🚀 CHARGEMENT DES SERVEURS EN TEMPS RÉEL
     async function loadServers() {
       try {
-        const res = await safeFetch(`${API_URL}/api/servers`);
+        const res = await fetch(`${API_URL}/api/servers`);
         if (!res.ok) throw new Error('Erreur réseau');
         
         const data = await res.json();
@@ -1197,6 +883,7 @@
           onlineServers++;
           totalCpu += srv.cpu || 0;
           totalRam += srv.ram || 0;
+          // On n'a pas le disque dans l'API, on met une valeur fictive basée sur le RAM pour l'exemple
           totalDisk += (srv.ram || 0) * 0.8; 
         }
 
@@ -1257,6 +944,7 @@
       document.getElementById('totalUsers').textContent = totalUsers;
       document.getElementById('activeServers').textContent = activeCount;
       
+      // Mettre à jour le graphique avec les moyennes
       if (onlineServers > 0) {
         updateChart(totalCpu / onlineServers, totalRam / onlineServers, totalDisk / onlineServers);
       } else {
@@ -1313,34 +1001,21 @@
       infoMsg.classList.remove('show');
       phoneInput.value = '';
       consentCheck.checked = false;
-      resetTurnstile();  // 🆕 Reset le captcha
       updateBtn();
     }
 
-    // 📝 VALIDATION DU FORMULAIRE (avec Turnstile)
+    // 📝 VALIDATION DU FORMULAIRE
     function updateBtn() {
       const phone = phoneInput.value.replace(/\D/g, '');
-      const phoneValid = phone.length >= 9;
-      const consentValid = consentCheck.checked;
-      const captchaValid = !!turnstileToken;  // 🆕 Vérif Turnstile
-      
-      pairBtn.disabled = !(phoneValid && consentValid && captchaValid);
+      pairBtn.disabled = !(phone.length >= 9 && consentCheck.checked);
     }
     phoneInput.addEventListener('input', updateBtn);
     consentCheck.addEventListener('change', updateBtn);
 
-    // 🚀 GÉNÉRATION DU CODE (avec Turnstile token)
+    // 🚀 GÉNÉRATION DU CODE
     pairBtn.addEventListener('click', async () => {
       const phone = phoneInput.value.replace(/\D/g, '');
       if (!selectedServerId) return showError('Veuillez sélectionner un serveur.');
-
-      // 🆕 Vérifier le token Turnstile
-      if (!turnstileToken) {
-        showError('Veuillez compléter le captcha de sécurité.');
-        resetTurnstile();
-        updateBtn();
-        return;
-      }
 
       pairBtn.disabled = true;
       pairBtn.textContent = '⏳ Génération en cours...';
@@ -1348,31 +1023,13 @@
       resultBox.classList.remove('show');
 
       try {
-        const res = await safeFetch(`${API_URL}/api/pair`, {
+        const res = await fetch(`${API_URL}/api/pair`, {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            // 🆕 On envoie le token Turnstile dans un header dédié
-            'CF-Turnstile-Response': turnstileToken
-          },
-          body: JSON.stringify({ 
-            phone, 
-            consent: true, 
-            serverId: selectedServerId,
-            // 🆕 On envoie aussi le token dans le body (double sécurité)
-            turnstileToken: turnstileToken
-          })
-        }, 95000);  // 95s timeout car le worker peut prendre jusqu'à 90s
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, consent: true, serverId: selectedServerId })
+        });
 
         const data = await res.json();
-        
-        // 🆕 Gestion spécifique des erreurs rate-limit
-        if (res.status === 429) {
-          throw new Error(data.error || 'Trop de requêtes. Patientez avant de réessayer.');
-        }
-        if (res.status === 403) {
-          throw new Error('Accès refusé. Votre IP a peut-être été bannie.');
-        }
         if (!res.ok) throw new Error(data.error || 'Erreur serveur');
 
         currentPhone = phone;
@@ -1385,9 +1042,6 @@
         
         showInfo(`Code généré sur le serveur ${selectedServerId}. Entrez-le dans WhatsApp.`);
         
-        // 🆕 Reset le Turnstile après usage réussi
-        resetTurnstile();
-        
         setTimeout(loadServers, 2000);
         pollStatus();
 
@@ -1395,8 +1049,6 @@
         showError(e.message);
         pairBtn.textContent = '🔗 Générer le code de couplage';
         pairBtn.disabled = false;
-        // 🆕 Reset le Turnstile après échec
-        resetTurnstile();
       }
     });
 
@@ -1404,7 +1056,7 @@
     async function checkStatus() {
       if (!currentPhone) return;
       try {
-        const res = await safeFetch(`${API_URL}/api/status/${currentPhone}`);
+        const res = await fetch(`${API_URL}/api/status/${currentPhone}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur');
         
@@ -1419,7 +1071,7 @@
       if (!currentPhone) return;
       if (!confirm('Voulez-vous vraiment déconnecter votre bot ?')) return;
       try {
-        const res = await safeFetch(`${API_URL}/api/disconnect/${currentPhone}`, { method: 'POST' });
+        const res = await fetch(`${API_URL}/api/disconnect/${currentPhone}`, { method: 'POST' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur');
         showInfo('✅ Bot déconnecté.');
@@ -1433,7 +1085,7 @@
     async function pollStatus() {
       if (!currentPhone) return;
       try {
-        const res = await safeFetch(`${API_URL}/api/status/${currentPhone}`);
+        const res = await fetch(`${API_URL}/api/status/${currentPhone}`);
         const data = await res.json();
         if (data.status === 'connected') { 
           showInfo('✅ Votre bot est connecté et actif !'); 
