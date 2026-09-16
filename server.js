@@ -21,10 +21,10 @@ const USERS_FILE = './users.json';
 const IP_LOGS_FILE = './ip_logs.json';
 const BLACKLIST_FILE = './blacklist.json';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
-const ADMIN_KEY = process.env.ADMIN_KEY || 'xenoban-admin-2026';
+const ADMIN_KEY = process.env.ADMIN_KEY || 'xenoban-admin-2026-a7f3b9e2c8d1';
 
 // 🔒 VARIABLES DE SÉCURITÉ
-const API_KEY = process.env.HEXTECH_SECRET_KEY || 'change-moi-en-prod-2026';
+const API_KEY = process.env.HEXTECH_SECRET_KEY || 'hextech-secret-9f2a7c4e8b1d6a3f5c9e2b4d8a7f1c3e';
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s => s.trim());
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true' || true;
 
