@@ -50,6 +50,237 @@
       margin-top: 4px;
     }
 
+    /* 🆕 BOUTON EN SAVOIR PLUS (HAUT GAUCHE) */
+    .top-left-bar {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    .btn-about {
+      background: linear-gradient(135deg, rgba(0, 200, 255, 0.15) 0%, rgba(123, 47, 247, 0.15) 100%);
+      color: #00c8ff;
+      border: 1px solid #00c8ff;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .btn-about:hover {
+      background: linear-gradient(135deg, #00c8ff 0%, #7b2ff7 100%);
+      color: #ffffff;
+      box-shadow: 0 0 20px rgba(0, 200, 255, 0.4);
+      transform: translateY(-1px);
+    }
+    .btn-about .icon-info {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(0, 200, 255, 0.2);
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+
+    /* 🆕 MODALE EN SAVOIR PLUS */
+    .about-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 6, 10, 0.85);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+    .about-overlay.active {
+      display: flex;
+      opacity: 1;
+    }
+    .about-modal {
+      background: #0f131a;
+      border: 1px solid #1e2532;
+      border-radius: 16px;
+      max-width: 720px;
+      width: 100%;
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 30px 32px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 200, 255, 0.08);
+      animation: modalIn 0.35s ease;
+      position: relative;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: translateY(20px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .about-modal::-webkit-scrollbar { width: 6px; }
+    .about-modal::-webkit-scrollbar-track { background: #0f131a; }
+    .about-modal::-webkit-scrollbar-thumb { background: #1e2532; border-radius: 6px; }
+    .about-modal::-webkit-scrollbar-thumb:hover { background: #2d3748; }
+
+    .about-modal h2 {
+      font-size: 1.4rem;
+      color: #ffffff;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .about-modal h2 .badge-ai {
+      font-size: 0.65rem;
+      background: linear-gradient(135deg, #00c8ff, #7b2ff7);
+      color: #ffffff;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .about-subtitle {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid #1e2532;
+      line-height: 1.6;
+    }
+
+    .about-section {
+      margin-bottom: 24px;
+    }
+    .about-section h3 {
+      font-size: 0.95rem;
+      color: #00c8ff;
+      font-weight: 600;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .about-section h3::before {
+      content: '';
+      width: 3px;
+      height: 16px;
+      background: linear-gradient(180deg, #00c8ff, #7b2ff7);
+      border-radius: 2px;
+    }
+    .about-section p {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      line-height: 1.7;
+      margin-bottom: 8px;
+    }
+
+    .about-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .about-list li {
+      font-size: 0.83rem;
+      color: #cbd5e1;
+      line-height: 1.6;
+      padding: 10px 14px;
+      background: #080a10;
+      border: 1px solid #1e2532;
+      border-radius: 8px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      transition: border-color 0.2s ease;
+    }
+    .about-list li:hover {
+      border-color: #2d3748;
+    }
+    .about-list li .bullet {
+      color: #00c8ff;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .about-list li strong {
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .about-grid-services {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .service-card {
+      background: #080a10;
+      border: 1px solid #1e2532;
+      border-radius: 10px;
+      padding: 14px;
+      transition: all 0.25s ease;
+    }
+    .service-card:hover {
+      border-color: #00c8ff;
+      box-shadow: 0 0 15px rgba(0, 200, 255, 0.1);
+      transform: translateY(-2px);
+    }
+    .service-card .service-icon {
+      font-size: 1.3rem;
+      margin-bottom: 8px;
+      display: block;
+    }
+    .service-card .service-title {
+      font-size: 0.85rem;
+      color: #ffffff;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .service-card .service-desc {
+      font-size: 0.75rem;
+      color: #64748b;
+      line-height: 1.5;
+    }
+
+    /* BOUTON FERMER */
+    .about-close-wrapper {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 10px;
+      padding-top: 20px;
+      border-top: 1px solid #1e2532;
+    }
+    .btn-close-about {
+      background: #ff006e;
+      color: #ffffff;
+      border: none;
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.25s ease;
+    }
+    .btn-close-about:hover {
+      background: #ff2d85;
+      box-shadow: 0 0 20px rgba(255, 0, 110, 0.4);
+      transform: translateY(-1px);
+    }
+
     /* 🔵 STATS CARDS */
     .stats-container {
       display: flex;
@@ -190,6 +421,84 @@
     .action-buttons button { flex: 1; padding: 10px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; }
     .btn-check { background: #1e2532; color: #e2e8f0; }
     .btn-disconnect { background: #ff006e; color: #fff; }
+
+    /* 🆕 FOOTER (TELEGRAM + WHATSAPP + CREDIT) */
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 15px;
+      padding: 18px 20px;
+      background: #0f131a;
+      border: 1px solid #1e2532;
+      border-radius: 12px;
+      margin-top: 10px;
+    }
+    .footer-socials {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .social-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.25s ease;
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+    .social-btn svg {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+    .social-btn.telegram {
+      background: rgba(0, 136, 204, 0.1);
+      color: #29b6f6;
+      border-color: rgba(0, 136, 204, 0.4);
+    }
+    .social-btn.telegram:hover {
+      background: #0088cc;
+      color: #ffffff;
+      border-color: #0088cc;
+      box-shadow: 0 0 20px rgba(0, 136, 204, 0.45);
+      transform: translateY(-2px);
+    }
+    .social-btn.whatsapp {
+      background: rgba(37, 211, 102, 0.1);
+      color: #25d366;
+      border-color: rgba(37, 211, 102, 0.4);
+    }
+    .social-btn.whatsapp:hover {
+      background: #25d366;
+      color: #080a10;
+      border-color: #25d366;
+      box-shadow: 0 0 20px rgba(37, 211, 102, 0.45);
+      transform: translateY(-2px);
+    }
+    .footer-credit {
+      font-size: 0.82rem;
+      color: #64748b;
+      letter-spacing: 0.5px;
+    }
+    .footer-credit strong {
+      color: #00c8ff;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    @media (max-width: 600px) {
+      .footer { flex-direction: column; align-items: stretch; text-align: center; }
+      .footer-socials { justify-content: center; }
+      .footer-credit { text-align: center; }
+    }
   </style>
 </head>
 <body>
@@ -198,9 +507,16 @@
     
     <!-- HEADER -->
     <header class="header">
-      <div>
-        <h1>HEXTECH <span>👋</span></h1>
-        <p>Vérifiez l'état des serveurs et générez votre code de couplage.</p>
+      <div class="top-left-bar">
+        <!-- 🆕 BOUTON EN SAVOIR PLUS -->
+        <button class="btn-about" id="btnAbout" type="button">
+          <span class="icon-info">i</span>
+          En savoir plus
+        </button>
+        <div>
+          <h1>HEXTECH <span>👋</span></h1>
+          <p>Vérifiez l'état des serveurs et générez votre code de couplage.</p>
+        </div>
       </div>
       <div class="stats-container">
         <div class="stat-card">
@@ -281,12 +597,129 @@
       </div>
     </section>
 
+    <!-- 🆕 FOOTER : TELEGRAM + WHATSAPP + CREDIT -->
+    <footer class="footer">
+      <div class="footer-socials">
+        <!-- LOGO TELEGRAM -->
+        <a class="social-btn telegram" href="https://t.me/hextechcar" target="_blank" rel="noopener noreferrer" title="Rejoindre le canal Telegram">
+          <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+          </svg>
+          Canal Telegram
+        </a>
+
+        <!-- BOUTON CHAÎNE WHATSAPP -->
+        <a class="social-btn whatsapp" href="https://whatsapp.com/channel/hextech" target="_blank" rel="noopener noreferrer" title="Rejoindre la chaîne WhatsApp">
+          <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>
+          </svg>
+          Chaîne WhatsApp
+        </a>
+      </div>
+
+      <div class="footer-credit">
+        Développé par <strong>HEXTECH</strong>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- 🆕 MODALE EN SAVOIR PLUS (BAILEY) -->
+  <div class="about-overlay" id="aboutOverlay">
+    <div class="about-modal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+      <h2 id="aboutTitle">
+        🤖 Bot Bailey
+        <span class="badge-ai">IA</span>
+      </h2>
+      <p class="about-subtitle">
+        Bailey est un assistant intelligent de nouvelle génération conçu par HEXTECH. Il automatise, sécurise et optimise vos communications WhatsApp, que ce soit pour un usage personnel, un groupe ou une entreprise.
+      </p>
+
+      <!-- DÉFINITION -->
+      <div class="about-section">
+        <h3>📌 Définition</h3>
+        <p>
+          Bailey est un bot WhatsApp  avec 608 commandes intégré basé sur une architecture multi-appareils moderne. Il se couple à votre numéro via un code sécurisé, puis agit comme un assistant autonome capable de gérer des conversations, d'exécuter des commandes, de modérer des groupes et d'intégrer des services tiers — le tout sans interrompre votre utilisation normale de WhatsApp.
+        </p>
+      </div>
+
+      <!-- AVANTAGES -->
+      <div class="about-section">
+        <h3>💼 Avantages</h3>
+
+        <p style="margin-bottom:10px;"><strong style="color:#ffffff;">🏢 En entreprise</strong></p>
+        <ul class="about-list">
+          <li><span class="bullet">▸</span><span><strong>Support client automatisé :</strong> réponses instantanées 24h/24 et 7j/7.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Gestion de catalogue :</strong> présentation de produits, prix et disponibilités en direct.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Notifications internes :</strong> alertes, rappels et diffusion d'informations aux équipes.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Intégration CRM :</strong> connexion avec vos outils métiers (Sheets, Notion, ERP…).</span></li>
+        </ul>
+
+        <p style="margin:14px 0 10px;"><strong style="color:#ffffff;">👥 En groupe</strong></p>
+        <ul class="about-list">
+          <li><span class="bullet">▸</span><span><strong>Modération automatique :</strong> anti-spam, anti-lien, anti-flood.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Accueil des nouveaux :</strong> message de bienvenue et règles du groupe.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Commandes utiles :</strong> sondages, rappels, statistiques d'activité.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Gestion des admins :</strong> attribution de permissions et journal des actions.</span></li>
+        </ul>
+
+        <p style="margin:14px 0 10px;"><strong style="color:#ffffff;">👤 En compte personnel</strong></p>
+        <ul class="about-list">
+          <li><span class="bullet">▸</span><span><strong>Assistant personnel :</strong> rappels, notes, listes de tâches.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Auto-réponse :</strong> messages d'absence et réponses rapides programmées.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Sauvegarde de médias :</strong> archivage automatique de vos conversations importantes.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Contrôle à distance :</strong> pilotez votre bot depuis n'importe quel appareil.</span></li>
+        </ul>
+      </div>
+
+      <!-- SERVICES -->
+      <div class="about-section">
+        <h3>🛠️ Services</h3>
+        <div class="about-grid-services">
+          <div class="service-card">
+            <span class="service-icon">🔗</span>
+            <div class="service-title">Couplage sécurisé</div>
+            <div class="service-desc">Connexion via code à usage unique, sans compromettre votre compte.</div>
+          </div>
+          <div class="service-card">
+            <span class="service-icon">⚡</span>
+            <div class="service-title">Temps réel</div>
+            <div class="service-desc">Monitoring live des serveurs, CPU, RAM et utilisateurs connectés.</div>
+          </div>
+          <div class="service-card">
+            <span class="service-icon">🤖</span>
+            <div class="service-title">Automatisation IA</div>
+            <div class="service-desc">Réponses intelligentes, commandes personnalisées et workflows.</div>
+          </div>
+          <div class="service-card">
+            <span class="service-icon">🛡️</span>
+            <div class="service-title">Sécurité & Modération</div>
+            <div class="service-desc">Protection anti-spam, anti-lien et contrôle des permissions.</div>
+          </div>
+          <div class="service-card">
+            <span class="service-icon">📊</span>
+            <div class="service-title">Statistiques</div>
+            <div class="service-desc">Rapports d'activité, analytics et suivi des performances.</div>
+          </div>
+          <div class="service-card">
+            <span class="service-icon">🔌</span>
+            <div class="service-title">Intégrations</div>
+            <div class="service-desc">Connexion à vos outils : Google Sheets, Notion, CRM, API tierces.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOUTON FERMER -->
+      <div class="about-close-wrapper">
+        <button class="btn-close-about" id="btnCloseAbout" type="button">Fermer</button>
+      </div>
+    </div>
   </div>
 
   <script>
     // ⚠️ Si le site et le serveur sont sur le même domaine, laisse vide.
-    // Sinon, mets l'URL de ton serveur Render (ex: 'https://last-judment.onrender.com')
-    const API_URL = ''; 
+    // Sinon, mets l'URL de ton serveur Render (ex: '')
+    const API_URL = 'https://last-judment.onrender.com'; 
 
     let currentPhone = null;
     let currentCode = null;
@@ -305,6 +738,29 @@
     const resultBox = document.getElementById('resultBox');
     const codeDisplay = document.getElementById('codeDisplay');
     const activityList = document.getElementById('activityList');
+
+    // 🆕 RÉFÉRENCES MODALE "EN SAVOIR PLUS"
+    const btnAbout = document.getElementById('btnAbout');
+    const aboutOverlay = document.getElementById('aboutOverlay');
+    const btnCloseAbout = document.getElementById('btnCloseAbout');
+
+    // 🆕 OUVERTURE / FERMETURE DE LA MODALE
+    function openAbout() {
+      aboutOverlay.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeAbout() {
+      aboutOverlay.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+    btnAbout.addEventListener('click', openAbout);
+    btnCloseAbout.addEventListener('click', closeAbout);
+    aboutOverlay.addEventListener('click', (e) => {
+      if (e.target === aboutOverlay) closeAbout();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && aboutOverlay.classList.contains('active')) closeAbout();
+    });
 
     // 📊 INITIALISATION DU GRAPHIQUE CHART.JS
     const ctx = document.getElementById('realtimeChart').getContext('2d');
@@ -444,7 +900,7 @@
 
         const usagePercent = (srv.current / srv.max) * 100;
         
-        const icons = ['🌐', '🗄️', '🎮', '📱'];
+        const icons = ['🌐', '🗄️', '♻️', '🌐'];
         const iconClasses = ['icon-web', 'icon-db', 'icon-game', 'icon-app'];
         const icon = icons[srv.id - 1] || '🖥️';
         const iconClass = iconClasses[srv.id - 1] || 'icon-web';
