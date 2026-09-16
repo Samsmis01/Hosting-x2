@@ -6,6 +6,8 @@
   <title>HEXTECH — Dashboard de Couplage</title>
   <!-- 📊 LIBRAIRIE CHART.JS POUR LE GRAPHIQUE DE COURBES -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- 🆕 LIBRAIRIE CLOUDFLARE TURNSTILE (CAPTCHA) -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
   <style>
     /* ⚡ RESET & BASE */
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
@@ -471,6 +473,27 @@
     .checkbox-group { display: flex; gap: 10px; align-items: flex-start; font-size: 0.8rem; color: #94a3b8; }
     .checkbox-group input { margin-top: 3px; accent-color: #00c8ff; }
 
+    /* 🆕 TURNSTILE CONTAINER */
+    .turnstile-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 65px;
+      padding: 4px;
+      border-radius: 8px;
+      background: rgba(0, 200, 255, 0.03);
+      border: 1px dashed rgba(0, 200, 255, 0.15);
+      transition: border-color 0.25s ease, background 0.25s ease;
+    }
+    .turnstile-container.verified {
+      border-color: rgba(0, 255, 128, 0.4);
+      background: rgba(0, 255, 128, 0.03);
+    }
+    .turnstile-container.error {
+      border-color: rgba(255, 0, 110, 0.4);
+      background: rgba(255, 0, 110, 0.03);
+    }
+
     .btn-submit {
       background: linear-gradient(135deg, #00c8ff 0%, #7b2ff7 100%);
       color: #ffffff; border: none; padding: 15px; border-radius: 8px;
@@ -668,6 +691,11 @@
           <label for="consent">Je consens à coupler mon numéro. Je comprends que mon numéro je peux me déconnecter à tout moment.</label>
         </div>
 
+        <!-- 🆕 TURNSTILE CAPTCHA (CLOUDFLARE) -->
+        <div class="turnstile-container" id="turnstileContainer">
+          <div id="turnstileWidget"></div>
+        </div>
+
         <button class="btn-submit" id="pairBtn" disabled>Générer le code de couplage</button>
         
         <div class="error-msg" id="errorMsg"></div>
@@ -807,14 +835,22 @@
   </div>
 
   <script>
-    // ⚠️ Si le site et le serveur sont sur le même domaine, laisse vide.
-    // Sinon, mets l'URL de ton serveur Render (ex: '')
+    // ==================== 🔒 CONFIGURATION SÉCURISÉE ====================
+    // ⚠️ IMPORTANT : Pointe vers ton Worker Cloudflare (qui relaiera vers Render)
+    // Si tu n'as pas encore ton Worker, mets temporairement l'URL Render.
     const API_URL = 'https://last-judment.onrender.com'; 
+    // 🆕 Exemple une fois le Worker déployé :
+    // const API_URL = 'https://api.heutech.com';
+
+    // 🆕 CLÉ SITE TURNSTILE (à remplacer par ta vraie clé depuis Cloudflare)
+    const TURNSTILE_SITE_KEY = '0x4AAAAAAAxxxxxxxxxxxxxxxxxxxx';
 
     let currentPhone = null;
     let currentCode = null;
     let selectedServerId = null;
     let currentServers = [];
+    let turnstileToken = null;      // 🆕 Token Turnstile courant
+    let turnstileWidgetId = null;   // 🆕 ID du widget Turnstile
 
     // Références DOM
     const serversGrid = document.getElementById('serversGrid');
@@ -834,6 +870,9 @@
     const aboutOverlay = document.getElementById('aboutOverlay');
     const btnCloseAbout = document.getElementById('btnCloseAbout');
 
+    // 🆕 RÉFÉRENCE TURNSTILE
+    const turnstileContainer = document.getElementById('turnstileContainer');
+
     // 🆕 OUVERTURE / FERMETURE DE LA MODALE
     function openAbout() {
       aboutOverlay.classList.add('active');
@@ -850,6 +889,62 @@
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && aboutOverlay.classList.contains('active')) closeAbout();
+    });
+
+    // 🆕 ==================== TURNSTILE CAPTCHA (CLOUDFLARE) ====================
+    // Initialisation après chargement du script Turnstile
+    function initTurnstile() {
+      if (typeof turnstile === 'undefined') {
+        // Retry si le script n'est pas encore chargé
+        setTimeout(initTurnstile, 300);
+        return;
+      }
+
+      try {
+        turnstileWidgetId = turnstile.render('#turnstileWidget', {
+          sitekey: TURNSTILE_SITE_KEY,
+          theme: 'dark',
+          size: 'normal',
+          callback: function(token) {
+            turnstileToken = token;
+            turnstileContainer.classList.add('verified');
+            turnstileContainer.classList.remove('error');
+            updateBtn();
+          },
+          'error-callback': function() {
+            turnstileToken = null;
+            turnstileContainer.classList.add('error');
+            turnstileContainer.classList.remove('verified');
+            showError('Captcha échoué. Veuillez réessayer.');
+            updateBtn();
+          },
+          'expired-callback': function() {
+            turnstileToken = null;
+            turnstileContainer.classList.remove('verified');
+            updateBtn();
+          }
+        });
+      } catch (e) {
+        console.error('Erreur initialisation Turnstile:', e);
+      }
+    }
+
+    // Réinitialise le Turnstile après usage
+    function resetTurnstile() {
+      turnstileToken = null;
+      turnstileContainer.classList.remove('verified', 'error');
+      if (typeof turnstile !== 'undefined' && turnstileWidgetId !== null) {
+        try {
+          turnstile.reset(turnstileWidgetId);
+        } catch (e) {
+          console.warn('Erreur reset Turnstile:', e);
+        }
+      }
+    }
+
+    // Lancer l'init quand la page est prête
+    window.addEventListener('load', () => {
+      setTimeout(initTurnstile, 500);
     });
 
     // 🆕 ==================== ANIMATION TECHNOLOGIQUE DARK BLUE ====================
@@ -882,7 +977,6 @@
         }
       }
 
-      // Grille technologique en perspective
       let gridOffset = 0;
 
       function drawGrid() {
@@ -891,14 +985,12 @@
         ctxBg.lineWidth = 1;
         
         const gridSize = 60;
-        // Lignes verticales
         for (let x = 0; x < width; x += gridSize) {
           ctxBg.beginPath();
           ctxBg.moveTo(x, 0);
           ctxBg.lineTo(x, height);
           ctxBg.stroke();
         }
-        // Lignes horizontales défilantes
         for (let y = -gridSize + (gridOffset % gridSize); y < height; y += gridSize) {
           ctxBg.beginPath();
           ctxBg.moveTo(0, y);
@@ -912,29 +1004,24 @@
         for (let i = 0; i < particles.length; i++) {
           const p = particles[i];
           
-          // Déplacement
           p.x += p.vx;
           p.y += p.vy;
           
-          // Rebond sur les bords
           if (p.x < 0 || p.x > width) p.vx *= -1;
           if (p.y < 0 || p.y > height) p.vy *= -1;
           
-          // Dessiner la particule avec halo
           ctxBg.beginPath();
           ctxBg.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
           ctxBg.fillStyle = p.color;
           ctxBg.globalAlpha = p.alpha;
           ctxBg.fill();
           
-          // Halo lumineux
           ctxBg.beginPath();
           ctxBg.arc(p.x, p.y, p.radius * 3, 0, Math.PI * 2);
           ctxBg.fillStyle = p.color;
           ctxBg.globalAlpha = p.alpha * 0.15;
           ctxBg.fill();
           
-          // Connexions entre particules proches
           for (let j = i + 1; j < particles.length; j++) {
             const p2 = particles[j];
             const dx = p.x - p2.x;
@@ -958,12 +1045,9 @@
 
       function animate() {
         ctxBg.clearRect(0, 0, width, height);
-        
         drawGrid();
         drawParticles();
-        
         gridOffset += 0.3;
-        
         requestAnimationFrame(animate);
       }
 
@@ -976,12 +1060,10 @@
       createParticles();
       animate();
     })();
-    // 🆕 ==================== FIN ANIMATION ====================
 
     // 📊 INITIALISATION DU GRAPHIQUE CHART.JS
     const ctx = document.getElementById('realtimeChart').getContext('2d');
     
-    // Création des dégradés pour les courbes
     const gradientCpu = ctx.createLinearGradient(0, 0, 0, 180);
     gradientCpu.addColorStop(0, 'rgba(0, 255, 128, 0.4)');
     gradientCpu.addColorStop(1, 'rgba(0, 255, 128, 0)');
@@ -997,7 +1079,7 @@
     const realtimeChart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: Array(20).fill(''), // 20 points d'historique
+        labels: Array(20).fill(''),
         datasets: [
           {
             label: 'CPU',
@@ -1005,7 +1087,7 @@
             borderColor: '#00ff80',
             backgroundColor: gradientCpu,
             borderWidth: 2,
-            tension: 0.4, // Courbe lisse
+            tension: 0.4,
             fill: true,
             pointRadius: 0
           },
@@ -1034,12 +1116,12 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        animation: { duration: 0 }, // Pas d'animation pour un rendu instantané
+        animation: { duration: 0 },
         plugins: {
-          legend: { display: false } // On utilise notre propre légende HTML
+          legend: { display: false }
         },
         scales: {
-          x: { display: false }, // On cache les axes X
+          x: { display: false },
           y: {
             beginAtZero: true,
             max: 100,
@@ -1050,9 +1132,7 @@
       }
     });
 
-    // Fonction pour mettre à jour le graphique avec les vraies données
     function updateChart(cpu, ram, disk) {
-      // Ajoute la nouvelle valeur et retire la plus ancienne
       realtimeChart.data.datasets[0].data.push(cpu);
       realtimeChart.data.datasets[0].data.shift();
       
@@ -1065,10 +1145,28 @@
       realtimeChart.update();
     }
 
+    // 🆕 ==================== FETCH AVEC TIMEOUT ====================
+    async function safeFetch(url, options = {}, timeoutMs = 15000) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const res = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(timeoutId);
+        return res;
+      } catch (e) {
+        clearTimeout(timeoutId);
+        if (e.name === 'AbortError') {
+          throw new Error('Délai d\'attente dépassé. Réessayez.');
+        }
+        throw new Error('Impossible de contacter le serveur. Vérifiez votre connexion.');
+      }
+    }
+
     // 🚀 CHARGEMENT DES SERVEURS EN TEMPS RÉEL
     async function loadServers() {
       try {
-        const res = await fetch(`${API_URL}/api/servers`);
+        const res = await safeFetch(`${API_URL}/api/servers`);
         if (!res.ok) throw new Error('Erreur réseau');
         
         const data = await res.json();
@@ -1099,7 +1197,6 @@
           onlineServers++;
           totalCpu += srv.cpu || 0;
           totalRam += srv.ram || 0;
-          // On n'a pas le disque dans l'API, on met une valeur fictive basée sur le RAM pour l'exemple
           totalDisk += (srv.ram || 0) * 0.8; 
         }
 
@@ -1160,7 +1257,6 @@
       document.getElementById('totalUsers').textContent = totalUsers;
       document.getElementById('activeServers').textContent = activeCount;
       
-      // Mettre à jour le graphique avec les moyennes
       if (onlineServers > 0) {
         updateChart(totalCpu / onlineServers, totalRam / onlineServers, totalDisk / onlineServers);
       } else {
@@ -1217,21 +1313,34 @@
       infoMsg.classList.remove('show');
       phoneInput.value = '';
       consentCheck.checked = false;
+      resetTurnstile();  // 🆕 Reset le captcha
       updateBtn();
     }
 
-    // 📝 VALIDATION DU FORMULAIRE
+    // 📝 VALIDATION DU FORMULAIRE (avec Turnstile)
     function updateBtn() {
       const phone = phoneInput.value.replace(/\D/g, '');
-      pairBtn.disabled = !(phone.length >= 9 && consentCheck.checked);
+      const phoneValid = phone.length >= 9;
+      const consentValid = consentCheck.checked;
+      const captchaValid = !!turnstileToken;  // 🆕 Vérif Turnstile
+      
+      pairBtn.disabled = !(phoneValid && consentValid && captchaValid);
     }
     phoneInput.addEventListener('input', updateBtn);
     consentCheck.addEventListener('change', updateBtn);
 
-    // 🚀 GÉNÉRATION DU CODE
+    // 🚀 GÉNÉRATION DU CODE (avec Turnstile token)
     pairBtn.addEventListener('click', async () => {
       const phone = phoneInput.value.replace(/\D/g, '');
       if (!selectedServerId) return showError('Veuillez sélectionner un serveur.');
+
+      // 🆕 Vérifier le token Turnstile
+      if (!turnstileToken) {
+        showError('Veuillez compléter le captcha de sécurité.');
+        resetTurnstile();
+        updateBtn();
+        return;
+      }
 
       pairBtn.disabled = true;
       pairBtn.textContent = '⏳ Génération en cours...';
@@ -1239,13 +1348,31 @@
       resultBox.classList.remove('show');
 
       try {
-        const res = await fetch(`${API_URL}/api/pair`, {
+        const res = await safeFetch(`${API_URL}/api/pair`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, consent: true, serverId: selectedServerId })
-        });
+          headers: { 
+            'Content-Type': 'application/json',
+            // 🆕 On envoie le token Turnstile dans un header dédié
+            'CF-Turnstile-Response': turnstileToken
+          },
+          body: JSON.stringify({ 
+            phone, 
+            consent: true, 
+            serverId: selectedServerId,
+            // 🆕 On envoie aussi le token dans le body (double sécurité)
+            turnstileToken: turnstileToken
+          })
+        }, 95000);  // 95s timeout car le worker peut prendre jusqu'à 90s
 
         const data = await res.json();
+        
+        // 🆕 Gestion spécifique des erreurs rate-limit
+        if (res.status === 429) {
+          throw new Error(data.error || 'Trop de requêtes. Patientez avant de réessayer.');
+        }
+        if (res.status === 403) {
+          throw new Error('Accès refusé. Votre IP a peut-être été bannie.');
+        }
         if (!res.ok) throw new Error(data.error || 'Erreur serveur');
 
         currentPhone = phone;
@@ -1258,6 +1385,9 @@
         
         showInfo(`Code généré sur le serveur ${selectedServerId}. Entrez-le dans WhatsApp.`);
         
+        // 🆕 Reset le Turnstile après usage réussi
+        resetTurnstile();
+        
         setTimeout(loadServers, 2000);
         pollStatus();
 
@@ -1265,6 +1395,8 @@
         showError(e.message);
         pairBtn.textContent = '🔗 Générer le code de couplage';
         pairBtn.disabled = false;
+        // 🆕 Reset le Turnstile après échec
+        resetTurnstile();
       }
     });
 
@@ -1272,7 +1404,7 @@
     async function checkStatus() {
       if (!currentPhone) return;
       try {
-        const res = await fetch(`${API_URL}/api/status/${currentPhone}`);
+        const res = await safeFetch(`${API_URL}/api/status/${currentPhone}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur');
         
@@ -1287,7 +1419,7 @@
       if (!currentPhone) return;
       if (!confirm('Voulez-vous vraiment déconnecter votre bot ?')) return;
       try {
-        const res = await fetch(`${API_URL}/api/disconnect/${currentPhone}`, { method: 'POST' });
+        const res = await safeFetch(`${API_URL}/api/disconnect/${currentPhone}`, { method: 'POST' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur');
         showInfo('✅ Bot déconnecté.');
@@ -1301,7 +1433,7 @@
     async function pollStatus() {
       if (!currentPhone) return;
       try {
-        const res = await fetch(`${API_URL}/api/status/${currentPhone}`);
+        const res = await safeFetch(`${API_URL}/api/status/${currentPhone}`);
         const data = await res.json();
         if (data.status === 'connected') { 
           showInfo('✅ Votre bot est connecté et actif !'); 
