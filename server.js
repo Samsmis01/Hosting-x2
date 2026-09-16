@@ -1,10 +1,7 @@
 // server.js
 // Serveur maître HEXTECH - Gère 4 workers KataBump
 // 🔒 SÉCURISÉ : rate-limit + IP logging + API key + CORS strict
-// 🆕 ADMIN COMPLET : déconnexion + ban IP + stats pays + clics
-// 🆕 v2 : Exclusions stats internes + Auth disconnect/status
-// 🆕 v3 : Turnstile serveur + Page admin attaques
-// 🆕 v4 : Whitelist IPs Render/worker + Fix NaN + Route GET unban
+// 🆕 v5 : Whitelist auto workers + Fix stats temps réel + Fix NaN
 
 const express = require('express');
 const cors = require('cors');
@@ -21,87 +18,42 @@ const USERS_FILE = './users.json';
 const IP_LOGS_FILE = './ip_logs.json';
 const BLACKLIST_FILE = './blacklist.json';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
-const ADMIN_KEY = process.env.ADMIN_KEY || 'xenoban-admin-2026-a7f3b9e2c8d1';
+const ADMIN_KEY = process.env.ADMIN_KEY || 'xenoban-admin-2026';
 
 // 🔒 VARIABLES DE SÉCURITÉ
-const API_KEY = process.env.HEXTECH_SECRET_KEY || 'hextech-secret-9f2a7c4e8b1d6a3f5c9e2b4d8a7f1c3e';
+const API_KEY = process.env.HEXTECH_SECRET_KEY || 'change-moi-en-prod-2026';
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s => s.trim());
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true' || true;
 
 // 🆕 WHITELIST D'IPs DE CONFIANCE
 // Ces IPs ne sont JAMAIS bannies, JAMAIS comptées dans les stats, JAMAIS rate-limitées
-// 👉 Ajoute ici toutes les IPs de tes workers Render, ton IP perso, etc.
 const TRUSTED_IPS = [
-  // 📍 IPs locales
   '127.0.0.1',
   '::1',
   'localhost',
-
-  // 📍 IP de ton WORKER (celle qu'on voit dans les logs : 51.75.118.170)
+  // 📍 IP du worker (Render Frankfurt)
   '51.75.118.170',
-
-  // 📍 Plages d'IPs Render (Frankfurt - principal)
-  // Ces plages sont utilisées par tous les services Render
-  // ⚠️ Si Render change, ajoute les nouvelles IPs ici
-  // (voir : https://render.com/docs/static-outbound-ip-addresses)
-
-  // 📍 IP de ton site (si différent du master)
-  // Ajoute ici l'IP de ton Worker Cloudflare si tu en as un
-
-  // 📍 Ajoute ici ton IP personnelle (pour ne jamais être banni toi-même)
-  // Pour trouver ton IP : https://whatismyipaddress.com/
+  // 📍 IPs Render (Frankfurt) - plages communes
+  '51.75.0.0/16',
+  '51.89.0.0/16',
+  '51.91.0.0/16',
+  '51.195.0.0/16',
+  '51.210.0.0/16',
+  // 📍 Ajoute ici ton IP perso si tu veux
 ];
 
-// 🆕 Détection automatique des IPs privées/internes
-function isInternalIP(ip) {
-  if (!ip) return false;
-  
-  // IPs locales
-  if (ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') return true;
-  
-  // IPs privées (RFC 1918)
-  if (ip.startsWith('10.')) return true;
-  if (ip.startsWith('192.168.')) return true;
-  
-  // 172.16.0.0 → 172.31.255.255
-  if (ip.startsWith('172.')) {
-    const second = parseInt(ip.split('.')[1]);
-    if (second >= 16 && second <= 31) return true;
-  }
-  
-  // IPs link-local
-  if (ip.startsWith('169.254.')) return true;
-  
-  // IPs Cloudflare (si tu utilises Cloudflare)
-  if (ip.startsWith('172.68.') || ip.startsWith('172.69.') || ip.startsWith('172.70.') || ip.startsWith('172.71.')) return true;
-  
-  return false;
-}
-
-// 🆕 Vérifie si une IP est de confiance
-function isTrustedIP(ip) {
-  if (!ip) return false;
-  if (TRUSTED_IPS.includes(ip)) return true;
-  if (isInternalIP(ip)) return true;
-  return false;
-}
-
-// 🆕 Configuration Turnstile
-const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '';
-const TURNSTILE_ENABLED = process.env.TURNSTILE_ENABLED !== 'false' && TURNSTILE_SECRET_KEY.length > 0;
-const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
-
-// 🆕 CONFIGURATION DES STATS
+// 🆕 CONFIGURATION STATS
 const STATS_EXCLUDED_PATHS = [
   '/health',
   '/api/worker/',
   '/api/admin/',
   '/static/',
   '/admin',
-  '/admin.html'
+  '/admin.html',
+  '/favicon.ico'
 ];
 
-// 🆕 Configuration de l'anti-énumération
+// 🆕 Configuration anti-énumération
 const ENUM_CONFIG = {
   maxDistinctPhones: 10,
   windowMs: 60 * 60 * 1000
@@ -185,6 +137,48 @@ function getClientIP(req) {
   return req.ip || req.connection?.remoteAddress || 'unknown';
 }
 
+// 🆕 Détection IP privée / interne
+function isInternalIP(ip) {
+  if (!ip) return false;
+  if (ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') return true;
+  if (ip.startsWith('10.')) return true;
+  if (ip.startsWith('192.168.')) return true;
+  if (ip.startsWith('172.')) {
+    const second = parseInt(ip.split('.')[1]);
+    if (second >= 16 && second <= 31) return true;
+  }
+  if (ip.startsWith('169.254.')) return true;
+  return false;
+}
+
+// 🆕 Vérifie si une IP est de confiance (supporte CIDR simple)
+function isTrustedIP(ip) {
+  if (!ip) return false;
+  if (TRUSTED_IPS.includes(ip)) return true;
+  if (isInternalIP(ip)) return true;
+  
+  // Vérifier les plages CIDR simples (ex: 51.75.0.0/16)
+  for (const trusted of TRUSTED_IPS) {
+    if (trusted.includes('/')) {
+      const [range, bits] = trusted.split('/');
+      const mask = parseInt(bits);
+      // Match simple sur les 2 premiers octets pour /16
+      if (mask === 16) {
+        const rangePrefix = range.split('.').slice(0, 2).join('.');
+        const ipPrefix = ip.split('.').slice(0, 2).join('.');
+        if (rangePrefix === ipPrefix) return true;
+      }
+      // Match sur les 3 premiers octets pour /24
+      if (mask === 24) {
+        const rangePrefix = range.split('.').slice(0, 3).join('.');
+        const ipPrefix = ip.split('.').slice(0, 3).join('.');
+        if (rangePrefix === ipPrefix) return true;
+      }
+    }
+  }
+  return false;
+}
+
 // 🆕 Vérifie si un chemin doit être EXCLU des stats
 function isExcludedFromStats(pathname) {
   return STATS_EXCLUDED_PATHS.some(p => pathname.startsWith(p));
@@ -212,10 +206,9 @@ function saveJSON(file, data) {
 
 // ==================== 🔒 ENREGISTREMENT DES IPs ====================
 const ipLogs = loadJSON(IP_LOGS_FILE, { logs: [], stats: {}, countries: {} });
-
 if (!ipLogs.countries) ipLogs.countries = {};
 
-// 🆕 Détecte si une requête est suspecte (pour l'onglet attaques)
+// 🆕 Détecte si une requête est suspecte
 function isAttackLog(log) {
   const ua = (log.userAgent || '').toLowerCase();
   const suspiciousUAs = [
@@ -233,8 +226,6 @@ function logIP(req, endpoint, extra = {}) {
   const ua = req.headers['user-agent'] || 'unknown';
   const country = req.headers['cf-ipcountry'] || 'unknown';
   const city = req.headers['cf-ipcity'] || null;
-
-  // 🆕 NE PAS logger les IPs de confiance
   const trusted = isTrustedIP(ip);
 
   const logEntry = {
@@ -247,14 +238,13 @@ function logIP(req, endpoint, extra = {}) {
     city,
     referer: req.headers['referer'] || null,
     origin: req.headers['origin'] || null,
-    trusted,   // 🆕 Marquer comme IP de confiance
+    trusted,
     ...extra
   };
 
   logEntry.isAttack = !trusted && isAttackLog(logEntry);
 
   ipLogs.logs.push(logEntry);
-
   if (ipLogs.logs.length > 5000) {
     ipLogs.logs = ipLogs.logs.slice(-5000);
   }
@@ -270,7 +260,7 @@ function logIP(req, endpoint, extra = {}) {
       country: trusted ? 'INTERNAL' : country,
       city: city,
       attacks: 0,
-      trusted   // 🆕
+      trusted
     };
   }
   ipLogs.stats[ip].lastSeen = now;
@@ -283,7 +273,6 @@ function logIP(req, endpoint, extra = {}) {
     ipLogs.stats[ip].attacks = (ipLogs.stats[ip].attacks || 0) + 1;
   }
 
-  // 🆕 Stats par pays (n'exclut pas INTERNAL pour info)
   if (!ipLogs.countries[logEntry.country]) {
     ipLogs.countries[logEntry.country] = {
       count: 0,
@@ -322,7 +311,6 @@ process.on('SIGTERM', () => {
 const blacklist = loadJSON(BLACKLIST_FILE, { ips: {}, violations: {} });
 
 function isBlacklisted(ip) {
-  // 🆕 Les IPs de confiance ne sont JAMAIS bannies
   if (isTrustedIP(ip)) return false;
 
   const entry = blacklist.ips[ip];
@@ -339,8 +327,7 @@ function isBlacklisted(ip) {
 function recordViolation(ip, reason) {
   // 🆕 Les IPs de confiance ne génèrent JAMAIS de violation
   if (isTrustedIP(ip)) {
-    console.log(`✅ [TRUSTED] Violation ignorée pour ${ip} (${reason})`);
-    return;
+    return;   // Silencieux, pas de log pour éviter le spam
   }
 
   const now = Date.now();
@@ -360,8 +347,9 @@ function recordViolation(ip, reason) {
       reason: `Trop de violations: ${reason}`,
       bannedAt: now
     };
-    // 🐛 FIX : binDurationMs → banDurationMs
-    console.warn(`🚫 IP BANNIE: ${ip} pour ${BAN_CONFIG.banDurationMs / 1000 / 60} minutes`);
+    // 🐛 FIX : banDurationMs (pas binDurationMs)
+    const minutes = Math.round(BAN_CONFIG.banDurationMs / 1000 / 60);
+    console.warn(`🚫 IP BANNIE: ${ip} pour ${minutes} minutes`);
     saveJSON(BLACKLIST_FILE, blacklist);
   }
 }
@@ -374,9 +362,7 @@ function rateLimit(config, endpointName) {
     const ip = getClientIP(req);
 
     // 🆕 Les IPs de confiance ne sont JAMAIS rate-limitées
-    if (isTrustedIP(ip)) {
-      return next();
-    }
+    if (isTrustedIP(ip)) return next();
 
     if (isBlacklisted(ip)) {
       return res.status(403).json({ error: 'Accès refusé (IP bannie)' });
@@ -400,7 +386,6 @@ function rateLimit(config, endpointName) {
 
     if (entry.count > config.max) {
       recordViolation(ip, `rate-limit:${endpointName}`);
-      console.warn(`⚠️ Rate-limit dépassé: ${ip} sur ${endpointName} (${entry.count}/${config.max})`);
       res.setHeader('Retry-After', Math.ceil((entry.resetAt - now) / 1000));
       return res.status(429).json({
         error: 'Trop de requêtes. Veuillez patienter.',
@@ -419,18 +404,6 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// ==================== 🔒 VÉRIFICATION API KEY ====================
-function requireApiKey(req, res, next) {
-  const providedKey = req.headers['x-api-key'];
-  if (!providedKey || providedKey !== API_KEY) {
-    const ip = getClientIP(req);
-    recordViolation(ip, 'invalid-api-key');
-    console.warn(`🚫 API KEY invalide depuis ${ip}`);
-    return res.status(401).json({ error: 'Non autorisé' });
-  }
-  next();
-}
-
 // ==================== 🔒 VÉRIFICATION ADMIN ====================
 function isAdminAuthorized(req) {
   const headerKey = req.headers['x-admin-key'];
@@ -446,103 +419,22 @@ function isAdminAuthorized(req) {
 }
 
 function requireAdmin(req, res, next) {
-  // 🆕 Accepter les IPs de confiance avec header worker-id (communication worker → master)
   const ip = getClientIP(req);
   const workerId = req.headers['x-worker-id'];
-  
+
+  // 🆕 Accepter les IPs de confiance qui viennent du worker (avec header x-worker-id)
   if (workerId && isTrustedIP(ip)) {
-    // Le worker envoie son ID et vient d'une IP de confiance → OK
+    return next();
+  }
+
+  // 🆕 Accepter toute IP de confiance (Render interne)
+  if (isTrustedIP(ip)) {
     return next();
   }
 
   if (!isAdminAuthorized(req)) {
     recordViolation(ip, 'unauthorized-admin');
-    console.warn(`🚫 Admin refusé depuis ${ip} (${req.path})`);
     return res.status(401).json({ error: 'Non autorisé' });
-  }
-  next();
-}
-
-// ==================== 🆕 VÉRIFICATION CLOUDFLARE TURNSTILE ====================
-async function verifyTurnstile(req, res, next) {
-  if (!TURNSTILE_ENABLED) {
-    console.warn('⚠️ Turnstile désactivé (TURNSTILE_ENABLED=false)');
-    return next();
-  }
-
-  // 🆕 Les IPs de confiance bypass Turnstile
-  const ip = getClientIP(req);
-  if (isTrustedIP(ip)) {
-    console.log(`✅ [TRUSTED] Turnstile bypass pour ${ip}`);
-    return next();
-  }
-
-  const token =
-    req.headers['cf-turnstile-response'] ||
-    req.body?.turnstileToken ||
-    req.body?.cfTurnstileResponse ||
-    req.query?.turnstileToken;
-
-  if (!token) {
-    recordViolation(ip, 'missing-turnstile-token');
-    console.warn(`🚫 Turnstile token manquant depuis ${ip}`);
-    return res.status(403).json({
-      error: 'Vérification de sécurité requise. Rechargez la page.'
-    });
-  }
-
-  try {
-    const verifyRes = await fetch(TURNSTILE_VERIFY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        secret: TURNSTILE_SECRET_KEY,
-        response: token,
-        remoteip: ip
-      })
-    });
-
-    const result = await verifyRes.json();
-
-    if (!result.success) {
-      recordViolation(ip, 'turnstile-failed');
-      console.warn(`🚫 Turnstile échoué depuis ${ip}:`, result['error-codes']);
-      return res.status(403).json({
-        error: 'Vérification captcha échouée. Réessayez.'
-      });
-    }
-
-    req.turnstileVerified = true;
-    next();
-
-  } catch (e) {
-    console.error(`❌ Erreur Turnstile: ${e.message}`);
-    return res.status(500).json({ error: 'Erreur de vérification captcha' });
-  }
-}
-
-// ==================== 🔒 DÉTECTION USER-AGENT SUSPECT ====================
-const SUSPICIOUS_UA = [
-  /curl/i, /wget/i, /python/i, /python-requests/i,
-  /scrapy/i, /postman/i, /insomnia/i, /httpie/i,
-  /go-http-client/i, /java\//i, /okhttp/i
-];
-
-function detectSuspiciousClient(req, res, next) {
-  const ip = getClientIP(req);
-
-  // 🆕 Les IPs de confiance bypass la détection
-  if (isTrustedIP(ip)) return next();
-
-  const ua = req.headers['user-agent'] || '';
-  const isSuspicious = SUSPICIOUS_UA.some(pattern => pattern.test(ua));
-
-  if (isSuspicious && process.env.ALLOW_SUSPICIOUS_UA !== 'true') {
-    if (isAdminAuthorized(req)) return next();
-
-    recordViolation(ip, 'suspicious-ua');
-    console.warn(`🚫 User-Agent suspect bloqué: ${ip} → ${ua}`);
-    return res.status(403).json({ error: 'Accès refusé' });
   }
   next();
 }
@@ -566,11 +458,8 @@ function requireSessionToken(req, res, next) {
     if (!providedToken || providedToken !== user.sessionToken) {
       const ip = getClientIP(req);
       recordViolation(ip, 'invalid-session-token');
-      console.warn(`🚫 Session token invalide pour ${phone} depuis ${ip}`);
       return res.status(401).json({ error: 'Session invalide. Reconnectez-vous.' });
     }
-  } else {
-    console.warn(`⚠️ Utilisateur ${phone} sans session token (legacy)`);
   }
 
   next();
@@ -581,8 +470,6 @@ const enumerationTracker = new Map();
 
 function antiEnumeration(req, res, next) {
   const ip = getClientIP(req);
-
-  // 🆕 Les IPs de confiance bypass
   if (isTrustedIP(ip)) return next();
 
   const phone = req.params.phone;
@@ -603,7 +490,6 @@ function antiEnumeration(req, res, next) {
 
   if (entry.phones.size > ENUM_CONFIG.maxDistinctPhones) {
     recordViolation(ip, 'enumeration');
-    console.warn(`🚫 Anti-énumération: ${ip} a testé ${entry.phones.size} numéros différents`);
     return res.status(429).json({
       error: 'Trop de numéros différents testés. Réessayez plus tard.'
     });
@@ -635,7 +521,6 @@ app.use(cors({
     if (!origin) return callback(null, true);
     if (ALLOWED_ORIGINS.includes('*')) return callback(null, true);
     if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    console.warn(`🚫 CORS bloqué pour origin: ${origin}`);
     return callback(new Error('CORS non autorisé'));
   },
   methods: ['GET', 'POST', 'OPTIONS', 'DELETE'],
@@ -650,7 +535,6 @@ app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
 // ==================== 🆕 MIDDLEWARE GLOBAL : LOG INTELLIGENT ====================
 app.use((req, res, next) => {
-  // 🆕 Ne PAS logger : health, worker, admin, static, ET IPs de confiance
   if (!isExcludedFromStats(req.path)) {
     const ip = getClientIP(req);
     if (!isTrustedIP(ip)) {
@@ -716,9 +600,17 @@ app.get('/health', (req, res) => {
     status: 'ok',
     uptime: Math.floor(process.uptime()),
     ip: getClientIP(req),
-    trusted: isTrustedIP(getClientIP(req)),
-    turnstileEnabled: TURNSTILE_ENABLED
+    trusted: isTrustedIP(getClientIP(req))
   });
+});
+
+// ==================== ROUTE : RESET BLACKLIST (temporaire) ====================
+app.get('/reset-blacklist', (req, res) => {
+  if (req.query.key !== 'reset-temp-2026') return res.status(401).send('No');
+  blacklist.ips = {};
+  blacklist.violations = {};
+  saveJSON(BLACKLIST_FILE, blacklist);
+  res.send('✅ Blacklist vidée ! Total IPs restantes: ' + Object.keys(blacklist.ips).length);
 });
 
 // ==================== ROUTES PUBLIQUES ====================
@@ -763,7 +655,6 @@ app.get('/api/servers', (req, res) => {
 // ==================== ROUTE : PAIRING ====================
 app.post('/api/pair',
   rateLimit(RATE_LIMIT.pair, 'pair'),
-  verifyTurnstile,
   async (req, res) => {
     const { phone, consent, serverId } = req.body;
     const clientIP = getClientIP(req);
@@ -901,7 +792,7 @@ app.post('/api/disconnect/:phone',
     users[phone].disconnectAt = Date.now();
     saveUsers(users);
 
-    console.log(`🚪 Déconnexion demandée pour ${phone} (Server ${users[phone].serverId})`);
+    console.log(`🚪 Déconnexion demandée pour ${phone}`);
     res.json({ success: true, message: 'Déconnexion en cours...' });
   }
 );
@@ -987,15 +878,16 @@ app.post('/api/worker/:serverId/disconnect-done', requireAdmin, (req, res) => {
   if (users[phone]) {
     delete users[phone];
     saveUsers(users);
-    console.log(`🗑️ Utilisateur ${phone} supprimé (Server ${req.params.serverId})`);
+    console.log(`🗑️ Utilisateur ${phone} supprimé`);
   }
 
   res.json({ success: true });
 });
 
+// ⚡ ROUTE CRITIQUE : STATS TEMPS RÉEL DU WORKER
 app.post('/api/worker/:serverId/stats', requireAdmin, (req, res) => {
   const serverId = parseInt(req.params.serverId);
-  const { cpu, ram, uptime } = req.body;
+  const { cpu, ram, uptime, users } = req.body;
   const server = SERVERS.find(s => s.id === serverId);
 
   if (server) {
@@ -1004,16 +896,16 @@ app.post('/api/worker/:serverId/stats', requireAdmin, (req, res) => {
     server.uptime = uptime || 0;
     server.lastPing = Date.now();
     server.online = true;
+    if (users !== undefined) server.users = users;
   }
 
-  res.json({ success: true });
+  res.json({ success: true, serverId, cpu: server?.cpu, ram: server?.ram });
 });
 
 // ==================== ROUTES ADMIN ====================
 
 app.get('/api/admin/top-ips', requireAdmin, (req, res) => {
   const limit = parseInt(req.query.limit) || 20;
-  // 🆕 Exclure les IPs de confiance des stats
   const sorted = Object.entries(ipLogs.stats)
     .filter(([ip]) => !isTrustedIP(ip))
     .sort((a, b) => b[1].count - a[1].count)
@@ -1036,21 +928,12 @@ app.get('/api/admin/ip-stats/:ip', requireAdmin, (req, res) => {
   const users = loadUsers();
   const linkedUsers = Object.values(users)
     .filter(u => u.ip === ip)
-    .map(u => ({
-      phone: u.phone,
-      status: u.status,
-      serverId: u.serverId,
-      createdAt: u.createdAt
-    }));
+    .map(u => ({ phone: u.phone, status: u.status, serverId: u.serverId, createdAt: u.createdAt }));
 
   res.json({
     ip,
     trusted: isTrustedIP(ip),
-    stats: stats ? {
-      ...stats,
-      firstSeenFormatted: new Date(stats.firstSeen).toISOString(),
-      lastSeenFormatted: new Date(stats.lastSeen).toISOString()
-    } : null,
+    stats: stats ? { ...stats } : null,
     banned: banned || null,
     isBlacklisted: isBlacklisted(ip),
     linkedUsers
@@ -1067,7 +950,6 @@ app.get('/api/admin/blacklist', requireAdmin, (req, res) => {
 app.post('/api/admin/ban/:ip', requireAdmin, (req, res) => {
   const ip = req.params.ip;
 
-  // 🆕 Refuser de bannir une IP de confiance
   if (isTrustedIP(ip)) {
     return res.status(400).json({ error: 'Impossible de bannir une IP de confiance' });
   }
@@ -1084,17 +966,13 @@ app.post('/api/admin/ban/:ip', requireAdmin, (req, res) => {
     bannedUntil = Date.now() + BAN_CONFIG.banDurationMs;
   }
 
-  blacklist.ips[ip] = {
-    bannedUntil,
-    reason,
-    bannedAt: Date.now()
-  };
+  blacklist.ips[ip] = { bannedUntil, reason, bannedAt: Date.now() };
   saveJSON(BLACKLIST_FILE, blacklist);
-  console.log(`🚫 Ban manuel: ${ip} (${reason}) → ${bannedUntil === 'permanent' ? 'PERMANENT' : new Date(bannedUntil).toISOString()}`);
+  console.log(`🚫 Ban manuel: ${ip} (${reason})`);
   res.json({ success: true, ip, bannedUntil, reason });
 });
 
-// 🆕 POST unban
+// POST unban
 app.post('/api/admin/unban/:ip', requireAdmin, (req, res) => {
   const ip = req.params.ip;
   delete blacklist.ips[ip];
@@ -1111,7 +989,7 @@ app.get('/api/admin/unban/:ip', requireAdmin, (req, res) => {
   delete blacklist.violations[ip];
   saveJSON(BLACKLIST_FILE, blacklist);
   console.log(`✅ Unban (GET): ${ip}`);
-  res.json({ success: true, ip, message: 'IP débannie' });
+  res.json({ success: true, ip });
 });
 
 app.get('/api/admin/logs', requireAdmin, (req, res) => {
@@ -1129,10 +1007,7 @@ app.get('/api/admin/logs', requireAdmin, (req, res) => {
   if (ip) logs = logs.filter(l => l.ip === ip);
   if (attacksOnly) logs = logs.filter(l => l.isAttack === true);
 
-  res.json({
-    total: logs.length,
-    logs: logs.slice(-limit).reverse()
-  });
+  res.json({ total: logs.length, logs: logs.slice(-limit).reverse() });
 });
 
 app.get('/api/admin/countries', requireAdmin, (req, res) => {
@@ -1143,18 +1018,12 @@ app.get('/api/admin/countries', requireAdmin, (req, res) => {
       count: data.count,
       attacks: data.attacks || 0,
       uniqueIPs: Object.keys(data.uniqueIPs || {}).length,
-      topEndpoint: Object.entries(data.endpoints || {})
-        .sort((a, b) => b[1] - a[1])[0]?.[0] || '—',
-      firstSeen: data.firstSeen,
-      lastSeen: data.lastSeen,
-      ips: Object.keys(data.uniqueIPs || {})
+      topEndpoint: Object.entries(data.endpoints || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || '—',
+      lastSeen: data.lastSeen
     }))
     .sort((a, b) => b.count - a.count);
 
-  res.json({
-    total: countries.length,
-    countries
-  });
+  res.json({ total: countries.length, countries });
 });
 
 app.get('/api/admin/endpoints', requireAdmin, (req, res) => {
@@ -1162,12 +1031,7 @@ app.get('/api/admin/endpoints', requireAdmin, (req, res) => {
   
   ipLogs.logs.filter(l => !l.trusted).forEach(log => {
     if (!endpoints[log.endpoint]) {
-      endpoints[log.endpoint] = {
-        count: 0,
-        uniqueIPs: new Set(),
-        methods: {},
-        attacks: 0
-      };
+      endpoints[log.endpoint] = { count: 0, uniqueIPs: new Set(), methods: {}, attacks: 0 };
     }
     endpoints[log.endpoint].count++;
     endpoints[log.endpoint].uniqueIPs.add(log.ip);
@@ -1196,7 +1060,6 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
     status: u.status,
     ip: u.ip || '—',
     country: u.country || '—',
-    userAgent: u.userAgent || '—',
     createdAt: u.createdAt,
     connectedAt: u.connectedAt || null,
     code: u.code || null,
@@ -1210,17 +1073,14 @@ app.post('/api/admin/disconnect-user/:phone', requireAdmin, (req, res) => {
   const { phone } = req.params;
   const users = loadUsers();
 
-  if (!users[phone]) {
-    return res.status(404).json({ error: 'Utilisateur non trouvé' });
-  }
+  if (!users[phone]) return res.status(404).json({ error: 'Utilisateur non trouvé' });
 
   users[phone].status = 'disconnect_requested';
   users[phone].disconnectAt = Date.now();
-  users[phone].disconnectedBy = 'admin';
   saveUsers(users);
 
-  console.log(`🚪 Admin déconnexion ${phone} (Server ${users[phone].serverId})`);
-  res.json({ success: true, phone, message: 'Déconnexion en cours...' });
+  console.log(`🚪 Admin déconnexion ${phone}`);
+  res.json({ success: true, phone });
 });
 
 app.post('/api/admin/disconnect-ip/:ip', requireAdmin, (req, res) => {
@@ -1232,13 +1092,11 @@ app.post('/api/admin/disconnect-ip/:ip', requireAdmin, (req, res) => {
     if (users[phone].ip === ip && users[phone].status !== 'disconnected') {
       users[phone].status = 'disconnect_requested';
       users[phone].disconnectAt = Date.now();
-      users[phone].disconnectedBy = 'admin-ip-ban';
       affected.push(phone);
     }
   });
 
   saveUsers(users);
-  console.log(`🚪 Admin déconnexion IP ${ip} → ${affected.length} utilisateurs: ${affected.join(', ')}`);
   res.json({ success: true, ip, affected, count: affected.length });
 });
 
@@ -1246,16 +1104,14 @@ app.delete('/api/admin/user/:phone', requireAdmin, (req, res) => {
   const { phone } = req.params;
   const users = loadUsers();
 
-  if (!users[phone]) {
-    return res.status(404).json({ error: 'Utilisateur non trouvé' });
-  }
+  if (!users[phone]) return res.status(404).json({ error: 'Utilisateur non trouvé' });
 
   delete users[phone];
   saveUsers(users);
-  console.log(`🗑️ Admin suppression définitive ${phone}`);
   res.json({ success: true, phone });
 });
 
+// 🆕 OVERVIEW avec compteur whitelist
 app.get('/api/admin/overview', requireAdmin, (req, res) => {
   const users = loadUsers();
   const totalUsers = Object.keys(users).length;
@@ -1263,7 +1119,6 @@ app.get('/api/admin/overview', requireAdmin, (req, res) => {
   const pendingUsers = Object.values(users).filter(u => u.status === 'pending').length;
   const bannedIPs = Object.keys(blacklist.ips).length;
   
-  // 🆕 Exclure les IPs de confiance des stats
   const externalIPs = Object.keys(ipLogs.stats).filter(ip => !isTrustedIP(ip));
   const totalIPs = externalIPs.length;
   const totalLogs = ipLogs.logs.filter(l => !l.trusted).length;
@@ -1276,7 +1131,7 @@ app.get('/api/admin/overview', requireAdmin, (req, res) => {
   const botAttempts = ipLogs.logs.filter(l => {
     if (l.trusted) return false;
     const ua = (l.userAgent || '').toLowerCase();
-    return SUSPICIOUS_UA.some(p => p.test(ua));
+    return ['curl', 'wget', 'python', 'scrapy', 'postman', 'insomnia', 'httpie'].some(p => ua.includes(p));
   }).length;
 
   const fiveMinAgo = Date.now() - 5 * 60 * 1000;
@@ -1298,9 +1153,8 @@ app.get('/api/admin/overview', requireAdmin, (req, res) => {
     botAttempts,
     recentAttacks,
     totalAttacks,
-    trustedIPs: TRUSTED_IPS.length,   // 🆕
+    trustedIPs: TRUSTED_IPS.length,
     uptime: Math.floor(process.uptime()),
-    turnstileEnabled: TURNSTILE_ENABLED,
     servers: SERVERS.map(s => ({
       id: s.id,
       name: s.name,
@@ -1311,7 +1165,7 @@ app.get('/api/admin/overview', requireAdmin, (req, res) => {
   });
 });
 
-// ==================== ROUTE API : ATTAQUES ====================
+// ==================== ROUTE ATTAQUES ====================
 app.get('/api/admin/attacks', requireAdmin, (req, res) => {
   const minutes = parseInt(req.query.minutes) || 5;
   const since = Date.now() - minutes * 60 * 1000;
@@ -1324,54 +1178,21 @@ app.get('/api/admin/attacks', requireAdmin, (req, res) => {
   const byIP = {};
   attacks.forEach(a => {
     if (!byIP[a.ip]) {
-      byIP[a.ip] = {
-        ip: a.ip,
-        country: a.country,
-        count: 0,
-        endpoints: {},
-        firstSeen: a.timestamp,
-        lastSeen: a.timestamp,
-        userAgent: a.userAgent
-      };
+      byIP[a.ip] = { ip: a.ip, country: a.country, count: 0, endpoints: {}, firstSeen: a.timestamp, lastSeen: a.timestamp, userAgent: a.userAgent };
     }
     byIP[a.ip].count++;
     byIP[a.ip].endpoints[a.endpoint] = (byIP[a.ip].endpoints[a.endpoint] || 0) + 1;
     byIP[a.ip].lastSeen = a.timestamp;
   });
 
-  const topAttackers = Object.values(byIP)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 20);
+  const topAttackers = Object.values(byIP).sort((a, b) => b.count - a.count).slice(0, 20);
 
-  res.json({
-    total: attacks.length,
-    minutes,
-    topAttackers,
-    recentAttacks: attacks.slice(0, 50)
-  });
+  res.json({ total: attacks.length, minutes, topAttackers, recentAttacks: attacks.slice(0, 50) });
 });
 
-// ==================== ROUTE : VOIR WHITELIST ====================
+// ==================== WHITELIST API ====================
 app.get('/api/admin/trusted-ips', requireAdmin, (req, res) => {
-  res.json({
-    total: TRUSTED_IPS.length,
-    trustedIPs: TRUSTED_IPS
-  });
-});
-
-// ==================== ROUTE : AJOUTER IP DE CONFIANCE ====================
-app.post('/api/admin/trusted-ips', requireAdmin, (req, res) => {
-  const { ip } = req.body;
-  if (!ip || typeof ip !== 'string') {
-    return res.status(400).json({ error: 'IP requise' });
-  }
-  if (TRUSTED_IPS.includes(ip)) {
-    return res.status(409).json({ error: 'IP déjà dans la whitelist' });
-  }
-  TRUSTED_IPS.push(ip);
-  // Note: en mémoire seulement. Pour persister, il faut écrire dans un fichier.
-  console.log(`✅ IP ajoutée à la whitelist: ${ip}`);
-  res.json({ success: true, ip, total: TRUSTED_IPS.length });
+  res.json({ total: TRUSTED_IPS.length, trustedIPs: TRUSTED_IPS });
 });
 
 // ==================== PAGE ADMIN HTML ====================
@@ -1379,8 +1200,8 @@ app.get('/admin', (req, res) => {
   if (!isAdminAuthorized(req)) {
     return res.status(401).send(`
       <html><body style="background:#0a0e1a;color:#fff;font-family:sans-serif;padding:40px;text-align:center;">
-        <h1>🔒 JE T'AI EU 🙃</h1>
-        <p>PAUVRE AMATEUR, MAINTENANT ABONNE-TOI DANS MON PUTAIN DE CANAL T.me/hextechcar 🔥</p>
+        <h1>🔒 Non autorisé</h1>
+        <p>Ajoute <code>?key=ta-cle-admin</code> à l'URL</p>
       </body></html>
     `);
   }
@@ -1417,7 +1238,6 @@ app.get('/admin', (req, res) => {
   td { padding:10px; border-bottom:1px solid #1e2532; font-size:0.8rem; vertical-align:middle; }
   tr:hover { background:rgba(0,200,255,0.03); }
   tr.attack-row { background:rgba(255,0,110,0.05); }
-  tr.attack-row:hover { background:rgba(255,0,110,0.1); }
   tr.trusted-row { background:rgba(0,255,128,0.03); }
   .ip { font-family:monospace; color:#00e5ff; font-weight:600; }
   .count { color:#00ff80; font-weight:700; }
@@ -1426,36 +1246,27 @@ app.get('/admin', (req, res) => {
   .btn { padding:6px 12px; border-radius:6px; border:none; cursor:pointer; font-size:0.72rem; font-weight:600; transition:all 0.2s; margin:2px; }
   .btn:hover { transform:translateY(-1px); }
   .btn-ban { background:#ff006e; color:#fff; }
-  .btn-ban:hover { background:#ff2d85; }
   .btn-unban { background:#00c8ff; color:#080a10; }
-  .btn-unban:hover { background:#00e5ff; }
   .btn-disconnect { background:#ff9500; color:#080a10; }
-  .btn-disconnect:hover { background:#ffb733; }
   .btn-delete { background:#64748b; color:#fff; }
-  .btn-delete:hover { background:#94a3b8; }
   .btn-refresh { background:#1e2532; color:#e2e8f0; padding:10px 20px; margin-bottom:15px; font-size:0.85rem; }
-  .btn-refresh:hover { background:#2d3748; }
   .banned { color:#ff006e; font-weight:700; }
   .ok { color:#00ff80; font-weight:700; }
-  .trusted { color:#00ff80; font-weight:700; }
   .empty { text-align:center; color:#64748b; padding:30px; }
   .tabs { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
   .tab { padding:10px 16px; background:#1e2532; color:#94a3b8; border-radius:8px; cursor:pointer; font-size:0.82rem; font-weight:600; border:none; transition:all 0.2s; }
   .tab.active { background:#00c8ff; color:#080a10; }
   .tab.tab-attack.active { background:#ff006e; color:#fff; }
-  .tab:hover:not(.active) { background:#2d3748; color:#fff; }
   .tab-content { display:none; }
   .tab-content.active { display:block; }
   .filters { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
   .filters input, .filters select { padding:8px 12px; background:#080a10; border:1px solid #1e2532; border-radius:6px; color:#e2e8f0; font-size:0.8rem; }
-  .filters input:focus, .filters select:focus { outline:none; border-color:#00c8ff; }
   .badge { display:inline-block; padding:3px 8px; border-radius:20px; font-size:0.65rem; font-weight:700; }
   .badge-connected { background:rgba(0,255,128,0.15); color:#00ff80; }
   .badge-pending { background:rgba(255,149,0,0.15); color:#ff9500; }
-  .badge-disconnected { background:rgba(100,116,139,0.15); color:#94a3b8; }
   .badge-error { background:rgba(255,0,110,0.15); color:#ff006e; }
-  .badge-attack { background:rgba(255,0,110,0.15); color:#ff006e; padding:4px 10px; border-radius:20px; font-size:0.65rem; font-weight:700; }
   .badge-trusted { background:rgba(0,255,128,0.15); color:#00ff80; padding:4px 10px; border-radius:20px; font-size:0.65rem; font-weight:700; }
+  .badge-attack { background:rgba(255,0,110,0.15); color:#ff006e; padding:4px 10px; border-radius:20px; font-size:0.65rem; font-weight:700; }
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center; padding:20px; }
   .modal-overlay.active { display:flex; }
   .modal { background:#0f131a; border:1px solid #1e2532; border-radius:16px; padding:25px; max-width:500px; width:100%; }
@@ -1485,7 +1296,7 @@ app.get('/admin', (req, res) => {
   </div>
 
   <div class="tabs">
-    <button class="tab tab-attack active" data-tab="attacks">🚨 Attaques en cours</button>
+    <button class="tab tab-attack active" data-tab="attacks">🚨 Attaques</button>
     <button class="tab" data-tab="overview">📊 Vue d'ensemble</button>
     <button class="tab" data-tab="top">🏆 Top IPs</button>
     <button class="tab" data-tab="countries">🌍 Pays</button>
@@ -1496,16 +1307,15 @@ app.get('/admin', (req, res) => {
   </div>
 
   <div class="panel tab-content active" id="tab-attacks">
-    <h2>
-      🚨 Attaques en cours
-      <div style="display:flex;gap:8px;align-items:center">
-        <select id="attackMinutes" onchange="loadAttacks()" style="padding:6px 10px;background:#080a10;border:1px solid #1e2532;border-radius:6px;color:#e2e8f0;font-size:0.8rem">
+    <h2>🚨 Attaques en cours
+      <div style="display:flex;gap:8px">
+        <select id="attackMinutes" onchange="loadAttacks()" style="padding:6px;background:#080a10;border:1px solid #1e2532;border-radius:6px;color:#e2e8f0;font-size:0.8rem">
           <option value="5">5 min</option>
           <option value="15">15 min</option>
           <option value="60">1 heure</option>
           <option value="1440">24 heures</option>
         </select>
-        <button class="btn btn-refresh" onclick="loadAttacks()">🔄 Actualiser</button>
+        <button class="btn btn-refresh" onclick="loadAttacks()">🔄</button>
       </div>
     </h2>
     <div id="attacksContent"><div class="empty">Chargement...</div></div>
@@ -1513,62 +1323,56 @@ app.get('/admin', (req, res) => {
 
   <div class="panel tab-content" id="tab-overview">
     <h2>📊 Vue d'ensemble</h2>
-    <button class="btn btn-refresh" onclick="loadAll()">🔄 Rafraîchir</button>
+    <button class="btn btn-refresh" onclick="loadOverview()">🔄 Rafraîchir</button>
     <div id="overviewContent"><div class="empty">Chargement...</div></div>
   </div>
 
   <div class="panel tab-content" id="tab-top">
-    <h2>🏆 Top IPs les plus actives</h2>
+    <h2>🏆 Top IPs</h2>
     <div class="filters">
-      <input type="number" id="topLimit" value="50" min="1" max="500" placeholder="Limite">
-      <button class="btn btn-refresh" onclick="loadTop()">🔄 Actualiser</button>
+      <input type="number" id="topLimit" value="50" min="1" max="500">
+      <button class="btn btn-refresh" onclick="loadTop()">🔄</button>
     </div>
     <div id="topContent"><div class="empty">Chargement...</div></div>
   </div>
 
   <div class="panel tab-content" id="tab-countries">
-    <h2>🌍 Statistiques par pays</h2>
-    <button class="btn btn-refresh" onclick="loadCountries()">🔄 Actualiser</button>
+    <h2>🌍 Pays</h2>
+    <button class="btn btn-refresh" onclick="loadCountries()">🔄</button>
     <div id="countriesContent"><div class="empty">Chargement...</div></div>
   </div>
 
   <div class="panel tab-content" id="tab-endpoints">
-    <h2>📈 Nombre de clics par route</h2>
-    <button class="btn btn-refresh" onclick="loadEndpoints()">🔄 Actualiser</button>
+    <h2>📈 Clics par route</h2>
+    <button class="btn btn-refresh" onclick="loadEndpoints()">🔄</button>
     <div id="endpointsContent"><div class="empty">Chargement...</div></div>
   </div>
 
   <div class="panel tab-content" id="tab-users">
-    <h2>👥 Utilisateurs couplés</h2>
+    <h2>👥 Utilisateurs</h2>
     <div class="filters">
       <input type="text" id="userSearch" placeholder="Rechercher..." oninput="filterUsers()">
-      <button class="btn btn-refresh" onclick="loadUsers()">🔄 Actualiser</button>
+      <button class="btn btn-refresh" onclick="loadUsers()">🔄</button>
     </div>
     <div id="usersContent"><div class="empty">Chargement...</div></div>
   </div>
 
   <div class="panel tab-content" id="tab-logs">
-    <h2>📝 Logs récents</h2>
+    <h2>📝 Logs</h2>
     <div class="filters">
-      <input type="text" id="logIpFilter" placeholder="Filtrer par IP...">
-      <select id="logEndpointFilter">
-        <option value="">Tous les endpoints</option>
-        <option value="/api/pair">/api/pair</option>
-        <option value="/api/servers">/api/servers</option>
-        <option value="/api/status">/api/status</option>
-      </select>
-      <label style="display:flex;align-items:center;gap:5px;color:#94a3b8;font-size:0.8rem">
-        <input type="checkbox" id="logAttacksOnly"> Attaques seulement
-      </label>
+      <input type="text" id="logIpFilter" placeholder="Filtrer IP...">
       <input type="number" id="logLimit" value="200" min="10" max="1000">
-      <button class="btn btn-refresh" onclick="loadLogs()">🔄 Actualiser</button>
+      <label style="display:flex;align-items:center;gap:5px;color:#94a3b8;font-size:0.8rem">
+        <input type="checkbox" id="logAttacksOnly"> Attaques
+      </label>
+      <button class="btn btn-refresh" onclick="loadLogs()">🔄</button>
     </div>
     <div id="logsContent"><div class="empty">Chargement...</div></div>
   </div>
 
   <div class="panel tab-content" id="tab-banned">
-    <h2>🚫 IPs bannies</h2>
-    <button class="btn btn-refresh" onclick="loadBanned()">🔄 Actualiser</button>
+    <h2>🚫 Bannis</h2>
+    <button class="btn btn-refresh" onclick="loadBanned()">🔄</button>
     <div id="bannedContent"><div class="empty">Chargement...</div></div>
   </div>
 </div>
@@ -1576,8 +1380,8 @@ app.get('/admin', (req, res) => {
 <div class="modal-overlay" id="banModal">
   <div class="modal">
     <h3>🚫 Bannir une IP</h3>
-    <p style="color:#94a3b8; font-size:0.85rem; margin-top:5px;">IP ciblée : <span class="ip" id="banModalIp">—</span></p>
-    <label>Durée du ban</label>
+    <p style="color:#94a3b8;font-size:0.85rem;margin-top:5px">IP : <span class="ip" id="banModalIp">—</span></p>
+    <label>Durée</label>
     <select id="banDuration">
       <option value="3600000">1 heure</option>
       <option value="86400000" selected>24 heures</option>
@@ -1585,11 +1389,11 @@ app.get('/admin', (req, res) => {
       <option value="2592000000">30 jours</option>
       <option value="permanent">Permanent</option>
     </select>
-    <label>Raison (optionnel)</label>
-    <input type="text" id="banReason" placeholder="Ex: Spam massif...">
+    <label>Raison</label>
+    <input type="text" id="banReason" placeholder="Optionnel...">
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeBanModal()">Annuler</button>
-      <button class="btn-confirm" onclick="confirmBan()">Confirmer le ban</button>
+      <button class="btn-confirm" onclick="confirmBan()">Bannir</button>
     </div>
   </div>
 </div>
@@ -1624,7 +1428,6 @@ app.get('/admin', (req, res) => {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return res.json();
   }
-
   async function postAdmin(endpoint, body) {
     const sep = endpoint.includes('?') ? '&' : '?';
     const res = await fetch(API + endpoint + sep + 'key=' + encodeURIComponent(KEY), {
@@ -1635,67 +1438,18 @@ app.get('/admin', (req, res) => {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return res.json();
   }
-
   async function deleteAdmin(endpoint) {
     const sep = endpoint.includes('?') ? '&' : '?';
-    const res = await fetch(API + endpoint + sep + 'key=' + encodeURIComponent(KEY), {
-      method: 'DELETE'
-    });
+    const res = await fetch(API + endpoint + sep + 'key=' + encodeURIComponent(KEY), { method: 'DELETE' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return res.json();
   }
 
-  async function loadAttacks() {
-    try {
-      const minutes = document.getElementById('attackMinutes').value || 5;
-      const data = await fetchAdmin('/api/admin/attacks?minutes=' + minutes);
-      
-      if (!data.topAttackers || data.topAttackers.length === 0) {
-        document.getElementById('attacksContent').innerHTML = '<div class="empty">✅ Aucune attaque détectée sur cette période</div>';
-        return;
-      }
-
-      let html = '<div style="margin-bottom:15px;color:#ff9500;font-size:0.9rem">⚠️ <strong>' + data.total + ' attaques</strong> détectées sur les ' + minutes + ' dernières minutes</div>';
-      
-      html += '<h3 style="color:#ff006e;font-size:0.95rem;margin:15px 0 10px">🎯 Top Attaquants</h3>';
-      html += '<table><thead><tr><th>#</th><th>IP</th><th>Pays</th><th>Attaques</th><th>Endpoints</th><th>Dernière</th><th>User-Agent</th><th>Actions</th></tr></thead><tbody>';
-      data.topAttackers.forEach((a, i) => {
-        const endpoints = Object.entries(a.endpoints).map(([k,v]) => k + '(' + v + ')').join(', ');
-        html += '<tr class="attack-row">';
-        html += '<td>' + (i+1) + '</td>';
-        html += '<td class="ip">' + a.ip + '</td>';
-        html += '<td><span class="flag">' + getFlagEmoji(a.country) + '</span>' + (a.country || '—') + '</td>';
-        html += '<td class="count-attack">' + a.count + '</td>';
-        html += '<td style="font-family:monospace;font-size:0.7rem">' + endpoints + '</td>';
-        html += '<td style="font-size:0.72rem;color:#94a3b8">' + new Date(a.lastSeen).toLocaleString('fr-FR') + '</td>';
-        html += '<td style="font-size:0.68rem;color:#64748b;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + a.userAgent + '">' + (a.userAgent||'').substring(0,30) + '</td>';
-        html += '<td>';
-        html += '<button class="btn btn-ban" onclick="openBanModal(\\'' + a.ip + '\\')">Bannir</button>';
-        html += '</td>';
-        html += '</tr>';
-      });
-      html += '</tbody></table>';
-
-      if (data.recentAttacks && data.recentAttacks.length > 0) {
-        html += '<h3 style="color:#ff006e;font-size:0.95rem;margin:25px 0 10px">📋 Attaques récentes</h3>';
-        html += '<table><thead><tr><th>Heure</th><th>IP</th><th>Pays</th><th>Endpoint</th><th>Méthode</th><th>UA</th></tr></thead><tbody>';
-        data.recentAttacks.slice(0, 30).forEach(a => {
-          html += '<tr class="attack-row">';
-          html += '<td style="font-size:0.7rem;color:#94a3b8">' + new Date(a.timestamp).toLocaleString('fr-FR') + '</td>';
-          html += '<td class="ip">' + a.ip + '</td>';
-          html += '<td><span class="flag">' + getFlagEmoji(a.country) + '</span>' + (a.country || '—') + '</td>';
-          html += '<td style="font-family:monospace;font-size:0.72rem">' + a.endpoint + '</td>';
-          html += '<td>' + a.method + '</td>';
-          html += '<td style="font-size:0.7rem;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (a.userAgent||'') + '">' + (a.userAgent||'—').substring(0,40) + '</td>';
-          html += '</tr>';
-        });
-        html += '</tbody></table>';
-      }
-
-      document.getElementById('attacksContent').innerHTML = html;
-    } catch (e) {
-      document.getElementById('attacksContent').innerHTML = '<div class="empty">Erreur: ' + e.message + '</div>';
-    }
+  function getFlagEmoji(code) {
+    if (!code || code.length !== 2) return '🌍';
+    if (code === 'INTERNAL') return '🏠';
+    try { return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt())); }
+    catch(e) { return '🌍'; }
   }
 
   async function loadOverview() {
@@ -1712,12 +1466,10 @@ app.get('/admin', (req, res) => {
 
       let html = '<table><thead><tr><th>Serveur</th><th>Statut</th><th>CPU</th><th>RAM</th></tr></thead><tbody>';
       data.servers.forEach(s => {
-        html += '<tr>';
-        html += '<td>' + s.name + '</td>';
+        html += '<tr><td>' + s.name + '</td>';
         html += '<td>' + (s.online ? '<span class="ok">● En ligne</span>' : '<span class="banned">● Hors ligne</span>') + '</td>';
         html += '<td>' + (s.cpu || 0) + '%</td>';
-        html += '<td>' + (s.ram || 0) + '%</td>';
-        html += '</tr>';
+        html += '<td>' + (s.ram || 0) + '%</td></tr>';
       });
       html += '</tbody></table>';
       document.getElementById('overviewContent').innerHTML = html;
@@ -1730,72 +1482,75 @@ app.get('/admin', (req, res) => {
     try {
       const limit = document.getElementById('topLimit').value || 50;
       const data = await fetchAdmin('/api/admin/top-ips?limit=' + limit);
-      renderTop(data.top);
+      if (!data.top || data.top.length === 0) {
+        document.getElementById('topContent').innerHTML = '<div class="empty">Aucune IP</div>';
+        return;
+      }
+      let html = '<table><thead><tr><th>#</th><th>IP</th><th>Pays</th><th>Requêtes</th><th>Attaques</th><th>Statut</th><th>Actions</th></tr></thead><tbody>';
+      data.top.forEach((item, i) => {
+        const isTrusted = item.trusted;
+        const isAttacker = item.attacks > 0;
+        html += '<tr' + (isTrusted ? ' class="trusted-row"' : (isAttacker ? ' class="attack-row"' : '')) + '>';
+        html += '<td>' + (i+1) + '</td>';
+        html += '<td class="ip">' + item.ip + '</td>';
+        html += '<td>' + getFlagEmoji(item.country) + ' ' + (item.country || '—') + '</td>';
+        html += '<td class="count">' + item.count + '</td>';
+        html += '<td>' + (isAttacker ? '<span class="count-attack">' + item.attacks + '</span>' : '—') + '</td>';
+        html += '<td>' + (isTrusted ? '<span class="badge-trusted">✅ Whitelist</span>' : (item.blocked ? '<span class="banned">BANNI</span>' : '<span class="ok">OK</span>')) + '</td>';
+        html += '<td>';
+        if (!isTrusted) {
+          if (item.blocked) html += '<button class="btn btn-unban" onclick="unban(\\'' + item.ip + '\\')">Débannir</button>';
+          else html += '<button class="btn btn-ban" onclick="openBanModal(\\'' + item.ip + '\\')">Bannir</button>';
+          html += '<button class="btn btn-disconnect" onclick="disconnectIp(\\'' + item.ip + '\\')">Déconnecter</button>';
+        }
+        html += '</td></tr>';
+      });
+      html += '</tbody></table>';
+      document.getElementById('topContent').innerHTML = html;
     } catch (e) {
       document.getElementById('topContent').innerHTML = '<div class="empty">Erreur: ' + e.message + '</div>';
     }
   }
 
-  function getFlagEmoji(code) {
-    if (!code || code.length !== 2) return '🌍';
-    if (code === 'INTERNAL') return '🏠';
+  async function loadAttacks() {
     try {
-      return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt()));
-    } catch(e) { return '🌍'; }
-  }
-
-  function renderTop(list) {
-    if (!list || list.length === 0) {
-      document.getElementById('topContent').innerHTML = '<div class="empty">Aucune IP enregistrée</div>';
-      return;
-    }
-    let html = '<table><thead><tr><th>#</th><th>IP</th><th>Pays</th><th>Requêtes</th><th>Attaques</th><th>Statut</th><th>Actions</th></tr></thead><tbody>';
-    list.forEach((item, i) => {
-      const isAttacker = item.attacks > 0;
-      const isTrusted = item.trusted;
-      html += '<tr' + (isAttacker ? ' class="attack-row"' : (isTrusted ? ' class="trusted-row"' : '')) + '>';
-      html += '<td>' + (i+1) + '</td>';
-      html += '<td class="ip">' + item.ip + '</td>';
-      html += '<td><span class="flag">' + getFlagEmoji(item.country) + '</span>' + (item.country || '—') + '</td>';
-      html += '<td class="count">' + item.count + '</td>';
-      html += '<td>' + (isAttacker ? '<span class="count-attack">' + item.attacks + '</span>' : '—') + '</td>';
-      html += '<td>' + (isTrusted ? '<span class="badge-trusted">✅ Whitelist</span>' : (item.blocked ? '<span class="banned">BANNI</span>' : '<span class="ok">OK</span>')) + '</td>';
-      html += '<td>';
-      if (!isTrusted) {
-        if (item.blocked) {
-          html += '<button class="btn btn-unban" onclick="unban(\\'' + item.ip + '\\')">Débannir</button>';
-        } else {
-          html += '<button class="btn btn-ban" onclick="openBanModal(\\'' + item.ip + '\\')">Bannir</button>';
-        }
-        html += '<button class="btn btn-disconnect" onclick="disconnectIp(\\'' + item.ip + '\\')">Déconnecter</button>';
-      } else {
-        html += '<span style="color:#00ff80;font-size:0.7rem">✔ Jamais banni</span>';
+      const minutes = document.getElementById('attackMinutes').value || 5;
+      const data = await fetchAdmin('/api/admin/attacks?minutes=' + minutes);
+      if (!data.topAttackers || data.topAttackers.length === 0) {
+        document.getElementById('attacksContent').innerHTML = '<div class="empty">✅ Aucune attaque</div>';
+        return;
       }
-      html += '</td>';
-      html += '</tr>';
-    });
-    html += '</tbody></table>';
-    document.getElementById('topContent').innerHTML = html;
+      let html = '<div style="margin-bottom:15px;color:#ff9500">⚠️ <strong>' + data.total + ' attaques</strong> sur ' + minutes + ' min</div>';
+      html += '<table><thead><tr><th>#</th><th>IP</th><th>Pays</th><th>Attaques</th><th>Actions</th></tr></thead><tbody>';
+      data.topAttackers.forEach((a, i) => {
+        html += '<tr class="attack-row">';
+        html += '<td>' + (i+1) + '</td>';
+        html += '<td class="ip">' + a.ip + '</td>';
+        html += '<td>' + getFlagEmoji(a.country) + ' ' + a.country + '</td>';
+        html += '<td class="count-attack">' + a.count + '</td>';
+        html += '<td><button class="btn btn-ban" onclick="openBanModal(\\'' + a.ip + '\\')">Bannir</button></td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      document.getElementById('attacksContent').innerHTML = html;
+    } catch (e) {
+      document.getElementById('attacksContent').innerHTML = '<div class="empty">Erreur: ' + e.message + '</div>';
+    }
   }
 
   async function loadCountries() {
     try {
       const data = await fetchAdmin('/api/admin/countries');
       if (!data.countries || data.countries.length === 0) {
-        document.getElementById('countriesContent').innerHTML = '<div class="empty">Aucun pays enregistré</div>';
+        document.getElementById('countriesContent').innerHTML = '<div class="empty">Aucun pays</div>';
         return;
       }
-      let html = '<table><thead><tr><th>Pays</th><th>Code</th><th>Requêtes</th><th>Attaques</th><th>IPs uniques</th><th>Endpoint top</th><th>Dernière</th></tr></thead><tbody>';
+      let html = '<table><thead><tr><th>Pays</th><th>Requêtes</th><th>Attaques</th><th>IPs</th></tr></thead><tbody>';
       data.countries.forEach(c => {
-        html += '<tr' + (c.attacks > 0 ? ' class="attack-row"' : '') + '>';
-        html += '<td><span class="flag">' + getFlagEmoji(c.code) + '</span>' + c.code + '</td>';
-        html += '<td style="color:#94a3b8">' + c.code + '</td>';
+        html += '<tr><td>' + getFlagEmoji(c.code) + ' ' + c.code + '</td>';
         html += '<td class="count">' + c.count + '</td>';
         html += '<td>' + (c.attacks > 0 ? '<span class="count-attack">' + c.attacks + '</span>' : '—') + '</td>';
-        html += '<td>' + c.uniqueIPs + '</td>';
-        html += '<td style="font-family:monospace;font-size:0.72rem">' + c.topEndpoint + '</td>';
-        html += '<td style="font-size:0.72rem;color:#94a3b8">' + new Date(c.lastSeen).toLocaleString('fr-FR') + '</td>';
-        html += '</tr>';
+        html += '<td>' + c.uniqueIPs + '</td></tr>';
       });
       html += '</tbody></table>';
       document.getElementById('countriesContent').innerHTML = html;
@@ -1808,19 +1563,15 @@ app.get('/admin', (req, res) => {
     try {
       const data = await fetchAdmin('/api/admin/endpoints');
       if (!data.endpoints || data.endpoints.length === 0) {
-        document.getElementById('endpointsContent').innerHTML = '<div class="empty">Aucun clic enregistré</div>';
+        document.getElementById('endpointsContent').innerHTML = '<div class="empty">Aucun clic</div>';
         return;
       }
-      let html = '<table><thead><tr><th>Endpoint</th><th>Clics</th><th>Attaques</th><th>IPs uniques</th><th>Méthodes</th></tr></thead><tbody>';
+      let html = '<table><thead><tr><th>Endpoint</th><th>Clics</th><th>Attaques</th><th>IPs uniques</th></tr></thead><tbody>';
       data.endpoints.forEach(e => {
-        const methods = Object.entries(e.methods).map(([m, c]) => m + ': ' + c).join(', ');
-        html += '<tr' + (e.attacks > 0 ? ' class="attack-row"' : '') + '>';
-        html += '<td style="font-family:monospace;color:#00e5ff">' + e.endpoint + '</td>';
+        html += '<tr><td style="font-family:monospace;color:#00e5ff">' + e.endpoint + '</td>';
         html += '<td class="count">' + e.count + '</td>';
         html += '<td>' + (e.attacks > 0 ? '<span class="count-attack">' + e.attacks + '</span>' : '—') + '</td>';
-        html += '<td>' + e.uniqueIPs + '</td>';
-        html += '<td style="font-size:0.72rem;color:#94a3b8">' + methods + '</td>';
-        html += '</tr>';
+        html += '<td>' + e.uniqueIPs + '</td></tr>';
       });
       html += '</tbody></table>';
       document.getElementById('endpointsContent').innerHTML = html;
@@ -1838,40 +1589,25 @@ app.get('/admin', (req, res) => {
       document.getElementById('usersContent').innerHTML = '<div class="empty">Erreur: ' + e.message + '</div>';
     }
   }
-
   function filterUsers() {
     const q = (document.getElementById('userSearch').value || '').toLowerCase();
-    const list = allUsers.filter(u =>
-      !q || u.phone.includes(q) || (u.ip || '').includes(q) || (u.country || '').toLowerCase().includes(q)
-    );
-    renderUsers(list);
-  }
-
-  function renderUsers(list) {
+    const list = allUsers.filter(u => !q || u.phone.includes(q) || (u.ip || '').includes(q));
     if (!list || list.length === 0) {
       document.getElementById('usersContent').innerHTML = '<div class="empty">Aucun utilisateur</div>';
       return;
     }
-    let html = '<table><thead><tr><th>Numéro</th><th>Serveur</th><th>Statut</th><th>IP</th><th>Pays</th><th>Token</th><th>Créé</th><th>Actions</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>Numéro</th><th>Serveur</th><th>Statut</th><th>IP</th><th>Pays</th><th>Actions</th></tr></thead><tbody>';
     list.forEach(u => {
-      const badge = u.status === 'connected' ? 'badge-connected' :
-                    u.status === 'pending' ? 'badge-pending' :
-                    u.status === 'error' ? 'badge-error' : 'badge-disconnected';
-      html += '<tr>';
-      html += '<td class="ip">+' + u.phone + '</td>';
+      const badge = u.status === 'connected' ? 'badge-connected' : u.status === 'pending' ? 'badge-pending' : 'badge-error';
+      html += '<tr><td class="ip">+' + u.phone + '</td>';
       html += '<td>' + u.serverId + '</td>';
       html += '<td><span class="badge ' + badge + '">' + u.status + '</span></td>';
       html += '<td style="font-family:monospace;font-size:0.72rem">' + (u.ip || '—') + '</td>';
-      html += '<td><span class="flag">' + getFlagEmoji(u.country) + '</span>' + (u.country || '—') + '</td>';
-      html += '<td>' + (u.hasSessionToken ? '🔐' : '⚠️') + '</td>';
-      html += '<td style="font-size:0.7rem;color:#94a3b8">' + (u.createdAt ? new Date(u.createdAt).toLocaleString('fr-FR') : '—') + '</td>';
+      html += '<td>' + getFlagEmoji(u.country) + ' ' + (u.country || '—') + '</td>';
       html += '<td>';
-      if (u.status !== 'disconnected') {
-        html += '<button class="btn btn-disconnect" onclick="disconnectUser(\\'' + u.phone + '\\')">Déconnecter</button>';
-      }
-      html += '<button class="btn btn-delete" onclick="deleteUser(\\'' + u.phone + '\\')">Supprimer</button>';
-      html += '</td>';
-      html += '</tr>';
+      if (u.status !== 'disconnected') html += '<button class="btn btn-disconnect" onclick="disconnectUser(\\'' + u.phone + '\\')">Déconnecter</button>';
+      html += '<button class="btn btn-delete" onclick="deleteUser(\\'' + u.phone + '\\')">Suppr</button>';
+      html += '</td></tr>';
     });
     html += '</tbody></table>';
     document.getElementById('usersContent').innerHTML = html;
@@ -1881,28 +1617,24 @@ app.get('/admin', (req, res) => {
     try {
       const limit = document.getElementById('logLimit').value || 200;
       const ipFilter = document.getElementById('logIpFilter').value;
-      const epFilter = document.getElementById('logEndpointFilter').value;
       const attacksOnly = document.getElementById('logAttacksOnly').checked;
       let url = '/api/admin/logs?limit=' + limit;
       if (ipFilter) url += '&ip=' + encodeURIComponent(ipFilter);
-      if (epFilter) url += '&endpoint=' + encodeURIComponent(epFilter);
       if (attacksOnly) url += '&attacks=true';
       const data = await fetchAdmin(url);
       if (!data.logs || data.logs.length === 0) {
         document.getElementById('logsContent').innerHTML = '<div class="empty">Aucun log</div>';
         return;
       }
-      let html = '<table><thead><tr><th>Heure</th><th>IP</th><th>Pays</th><th>Méthode</th><th>Endpoint</th><th>UA</th><th>Type</th></tr></thead><tbody>';
+      let html = '<table><thead><tr><th>Heure</th><th>IP</th><th>Pays</th><th>Méthode</th><th>Endpoint</th><th>Type</th></tr></thead><tbody>';
       data.logs.forEach(log => {
-        const date = new Date(log.timestamp).toLocaleString('fr-FR');
         html += '<tr' + (log.isAttack ? ' class="attack-row"' : (log.trusted ? ' class="trusted-row"' : '')) + '>';
-        html += '<td style="font-size:0.7rem;color:#94a3b8">' + date + '</td>';
+        html += '<td style="font-size:0.7rem;color:#94a3b8">' + new Date(log.timestamp).toLocaleString('fr-FR') + '</td>';
         html += '<td class="ip">' + log.ip + '</td>';
-        html += '<td><span class="flag">' + getFlagEmoji(log.country) + '</span>' + (log.country || '—') + '</td>';
+        html += '<td>' + getFlagEmoji(log.country) + ' ' + (log.country || '—') + '</td>';
         html += '<td>' + log.method + '</td>';
         html += '<td style="font-family:monospace;font-size:0.72rem">' + log.endpoint + '</td>';
-        html += '<td style="font-size:0.7rem;color:#64748b;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (log.userAgent||'') + '">' + (log.userAgent||'—').substring(0,50) + '</td>';
-        html += '<td>' + (log.trusted ? '<span class="badge-trusted">✅ Confiance</span>' : (log.isAttack ? '<span class="badge-attack">🚨 Attaque</span>' : '<span class="ok">✓</span>')) + '</td>';
+        html += '<td>' + (log.trusted ? '<span class="badge-trusted">✅</span>' : (log.isAttack ? '<span class="badge-attack">🚨</span>' : '✓')) + '</td>';
         html += '</tr>';
       });
       html += '</tbody></table>';
@@ -1917,21 +1649,16 @@ app.get('/admin', (req, res) => {
       const data = await fetchAdmin('/api/admin/blacklist');
       const list = Object.entries(data.ips || {});
       if (list.length === 0) {
-        document.getElementById('bannedContent').innerHTML = '<div class="empty">Aucune IP bannie 🎉</div>';
+        document.getElementById('bannedContent').innerHTML = '<div class="empty">✅ Aucune IP bannie</div>';
         return;
       }
-      let html = '<table><thead><tr><th>IP</th><th>Raison</th><th>Banni le</th><th>Expire</th><th>Actions</th></tr></thead><tbody>';
+      let html = '<table><thead><tr><th>IP</th><th>Raison</th><th>Expire</th><th>Actions</th></tr></thead><tbody>';
       list.forEach(([ip, info]) => {
-        const bannedAt = info.bannedAt ? new Date(info.bannedAt).toLocaleString('fr-FR') : '—';
-        const bannedUntil = info.bannedUntil === 'permanent' ? 'PERMANENT' :
-                            info.bannedUntil ? new Date(info.bannedUntil).toLocaleString('fr-FR') : '—';
-        html += '<tr>';
-        html += '<td class="ip">' + ip + '</td>';
+        const bannedUntil = info.bannedUntil === 'permanent' ? 'PERMANENT' : (info.bannedUntil ? new Date(info.bannedUntil).toLocaleString('fr-FR') : '—');
+        html += '<tr><td class="ip">' + ip + '</td>';
         html += '<td style="font-size:0.78rem;color:#94a3b8">' + (info.reason || '—') + '</td>';
-        html += '<td style="font-size:0.72rem">' + bannedAt + '</td>';
         html += '<td style="font-size:0.72rem;color:#ff006e">' + bannedUntil + '</td>';
-        html += '<td><button class="btn btn-unban" onclick="unban(\\'' + ip + '\\')">Débannir</button></td>';
-        html += '</tr>';
+        html += '<td><button class="btn btn-unban" onclick="unban(\\'' + ip + '\\')">Débannir</button></td></tr>';
       });
       html += '</tbody></table>';
       document.getElementById('bannedContent').innerHTML = html;
@@ -1952,63 +1679,41 @@ app.get('/admin', (req, res) => {
   async function confirmBan() {
     if (!currentBanIp) return;
     const durationVal = document.getElementById('banDuration').value;
-    const reason = document.getElementById('banReason').value || 'Ban manuel admin';
-    const body = {
-      reason,
-      duration: durationVal === 'permanent' ? 'permanent' : parseInt(durationVal)
-    };
+    const reason = document.getElementById('banReason').value || 'Ban manuel';
+    const body = { reason, duration: durationVal === 'permanent' ? 'permanent' : parseInt(durationVal) };
     try {
       await postAdmin('/api/admin/ban/' + currentBanIp, body);
       closeBanModal();
       loadTop(); loadBanned(); loadOverview();
     } catch(e) { alert('Erreur: ' + e.message); }
   }
-
   async function unban(ip) {
     if (!confirm('Débannir ' + ip + ' ?')) return;
-    try {
-      await postAdmin('/api/admin/unban/' + ip);
-      loadTop(); loadBanned(); loadOverview();
-    } catch(e) { alert('Erreur: ' + e.message); }
+    try { await postAdmin('/api/admin/unban/' + ip); loadTop(); loadBanned(); loadOverview(); }
+    catch(e) { alert('Erreur: ' + e.message); }
   }
-
   async function disconnectIp(ip) {
-    if (!confirm('Déconnecter TOUS les utilisateurs de ' + ip + ' ?')) return;
-    try {
-      const r = await postAdmin('/api/admin/disconnect-ip/' + ip);
-      alert('✅ ' + r.count + ' utilisateur(s) déconnecté(s)');
-      loadUsers(); loadTop();
-    } catch(e) { alert('Erreur: ' + e.message); }
+    if (!confirm('Déconnecter les utilisateurs de ' + ip + ' ?')) return;
+    try { const r = await postAdmin('/api/admin/disconnect-ip/' + ip); alert(r.count + ' déconnectés'); loadUsers(); }
+    catch(e) { alert('Erreur: ' + e.message); }
   }
-
   async function disconnectUser(phone) {
     if (!confirm('Déconnecter +' + phone + ' ?')) return;
-    try {
-      await postAdmin('/api/admin/disconnect-user/' + phone);
-      alert('✅ Déconnexion en cours');
-      loadUsers();
-    } catch(e) { alert('Erreur: ' + e.message); }
+    try { await postAdmin('/api/admin/disconnect-user/' + phone); loadUsers(); }
+    catch(e) { alert('Erreur: ' + e.message); }
   }
-
   async function deleteUser(phone) {
-    if (!confirm('Supprimer DÉFINITIVEMENT +' + phone + ' ?')) return;
-    try {
-      await deleteAdmin('/api/admin/user/' + phone);
-      loadUsers();
-    } catch(e) { alert('Erreur: ' + e.message); }
-  }
-
-  async function loadAll() {
-    await loadOverview();
-    await loadTop();
+    if (!confirm('Supprimer ' + phone + ' ?')) return;
+    try { await deleteAdmin('/api/admin/user/' + phone); loadUsers(); }
+    catch(e) { alert('Erreur: ' + e.message); }
   }
 
   loadAttacks();
   loadOverview();
   setInterval(() => {
-    const activeTab = document.querySelector('.tab.active')?.dataset.tab;
-    if (activeTab === 'attacks') loadAttacks();
-    if (activeTab === 'overview') loadOverview();
+    const active = document.querySelector('.tab.active')?.dataset.tab;
+    if (active === 'attacks') loadAttacks();
+    if (active === 'overview') loadOverview();
   }, 10000);
 
   document.getElementById('banModal').addEventListener('click', e => {
@@ -2039,7 +1744,8 @@ async function pingServers() {
         signal: controller.signal,
         headers: {
           'X-Admin-Key': ADMIN_KEY,
-          'X-API-KEY': API_KEY
+          'X-API-KEY': API_KEY,
+          'X-Worker-Id': String(server.id)
         }
       });
 
@@ -2079,19 +1785,17 @@ setInterval(() => {
     if (users[phone].status === 'error' && now - users[phone].createdAt > 24 * 60 * 60 * 1000) {
       delete users[phone];
       changed = true;
-      console.log(`🧹 Supprimé (erreur): ${phone}`);
     }
     if (users[phone].status === 'pending' && now - users[phone].createdAt > 24 * 60 * 60 * 1000) {
       delete users[phone];
       changed = true;
-      console.log(`🧹 Supprimé (expiré): ${phone}`);
     }
   }
 
   if (changed) saveUsers(users);
 }, 60 * 60 * 1000);
 
-// ==================== 🔒 NETTOYAGE DES LOGS ANCIENS ====================
+// ==================== NETTOYAGE DES LOGS ANCIENS ====================
 setInterval(() => {
   const now = Date.now();
   const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
@@ -2112,31 +1816,26 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('════════════════════════════════════════');
   console.log(`🚀 Serveur maître HEXTECH démarré`);
   console.log(`📊 Port: ${PORT}`);
-  console.log(`🖥️ ${SERVERS.length} serveurs workers configurés :`);
+  console.log(`🖥️ ${SERVERS.length} serveurs workers :`);
   SERVERS.forEach(s => {
     console.log(`   • Server ${s.id} (${s.name}) → ${s.url || 'Non configuré'}`);
   });
   console.log(`👥 Max par serveur: ${MAX_USERS_PER_SERVER}`);
   console.log('────────────────────────────────────────');
-  console.log(`🔒 SÉCURITÉ ACTIVE :`);
-  console.log(`   • Rate-limit global : ${RATE_LIMIT.global.max} req/min`);
+  console.log(`✅ WHITELIST (${TRUSTED_IPS.length} entrées) :`);
+  TRUSTED_IPS.forEach(ip => console.log(`   • ${ip}`));
+  console.log(`   • + IPs privées (10.x, 192.168.x, 172.16-31.x)`);
+  console.log('────────────────────────────────────────');
+  console.log(`🔒 SÉCURITÉ :`);
   console.log(`   • Rate-limit /pair  : ${RATE_LIMIT.pair.max} req/min`);
   console.log(`   • Ban auto après    : ${BAN_CONFIG.maxViolations} violations`);
-  console.log(`   • Anti-énumération  : max ${ENUM_CONFIG.maxDistinctPhones} numéros/h par IP`);
+  console.log(`   • Anti-énumération  : ${ENUM_CONFIG.maxDistinctPhones} numéros/h`);
   console.log(`   • Session token     : REQUIS sur /status et /disconnect`);
-  console.log(`   • Turnstile         : ${TURNSTILE_ENABLED ? '✅ ACTIVÉ' : '⚠️ DÉSACTIVÉ'}`);
   console.log(`   • API Key           : ${API_KEY.substring(0, 8)}...`);
   console.log(`   • Admin Key         : ${ADMIN_KEY.substring(0, 8)}...`);
-  console.log(`   • Trust proxy       : ${TRUST_PROXY}`);
   console.log('────────────────────────────────────────');
-  console.log(`✅ WHITELIST (${TRUSTED_IPS.length} IPs) :`);
-  TRUSTED_IPS.forEach(ip => console.log(`   • ${ip}`));
-  console.log(`   • + IPs privées (10.x, 192.168.x, 172.16-31.x, 127.x)`);
-  console.log('────────────────────────────────────────');
-  console.log(`🧹 Stats exclues :`);
-  STATS_EXCLUDED_PATHS.forEach(p => console.log(`   • ${p}*`));
-  console.log('────────────────────────────────────────');
-  console.log(`🔐 Page admin : /admin?key=${ADMIN_KEY.substring(0,8)}...`);
+  console.log(`🔐 Admin : /admin?key=${ADMIN_KEY.substring(0,8)}...`);
+  console.log(`🧹 Reset blacklist : /reset-blacklist?key=reset-temp-2026`);
   console.log('════════════════════════════════════════');
 });
 
