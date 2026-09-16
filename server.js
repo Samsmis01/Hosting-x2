@@ -445,8 +445,8 @@ app.get('/admin', (req, res) => {
   if (!isAdminAuthorized(req)) {
     return res.status(401).send(`
       <html><body style="background:#0a0e1a;color:#fff;font-family:sans-serif;padding:40px;text-align:center;">
-        <h1>🔒 Non autorisé</h1>
-        <p>Ajoute <code>?key=ta-cle-admin</code> à l'URL</p>
+        <h1>🔒 JE T'AI EU 😂 </h1>
+        <p>AMATEUR, MAINTENANT TU VAS T'ABONNER DANS MON PUTAIN DE CANAL https://t.me/hextechcar OU SINON JE PEUT TE TRAQUER EN TOUT MOMENT CAR J'AI TES CORDONNÉES 😉</p>
       </body></html>
     `);
   }
