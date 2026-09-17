@@ -52,7 +52,7 @@ function getClientIP(req) {
 const SERVERS = [
   { id: 1, name: 'Serveur 1', url: process.env.SERVER_1_URL || 'https://last-judment.onrender.com/', lastPing: 0, online: false, cpu: 0, ram: 0, uptime: 0 },
   { id: 2, name: 'Serveur 2', url: process.env.SERVER_2_URL || 'https://last-judment.onrender.com/', lastPing: 0, online: false, cpu: 0, ram: 0, uptime: 0 },
-  { id: 3, name: 'Serveur 3', url: process.env.SERVER_3_URL || 'https://last-judment.onrender.com/', lastPing: 0, online: false, cpu: 0, ram: 0, uptime: 0 },
+  { id: 3, name: 'Serveur 3', url: process.env.SERVER_3_URL || '', lastPing: 0, online: false, cpu: 0, ram: 0, uptime: 0 },
   { id: 4, name: 'Serveur 4', url: process.env.SERVER_4_URL || 'https://last-judment.onrender.com/', lastPing: 0, online: false, cpu: 0, ram: 0, uptime: 0 }
 ];
 
