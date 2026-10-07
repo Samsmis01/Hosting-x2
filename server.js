@@ -1,16 +1,4 @@
-// server.js
-// Serveur de couplage multi-utilisateurs — 4 serveurs (workers) — version SÉCURISÉE
-//
-// 🔐 VARIABLES D'ENVIRONNEMENT (Render → Environment) :
-//   ADMIN_KEY             (obligatoire, 24+ caractères) clé partagée avec les workers (header x-admin-key)
-//   ENCRYPTION_KEY        (optionnel, 64 caractères hexadécimaux) chiffre users.json sur le disque
-//   ALLOWED_ORIGINS       (optionnel) sites autorisés à appeler l'API, ex: https://mon-site.com
-//   MAX_USERS_PER_SERVER  (optionnel, défaut 10)
-//   DATA_DIR              (optionnel, défaut ./data) dossier de users.json (utilise un Disk Render pour garder les données)
-//   ADMIN_PANEL_USERNAME  (optionnel, défaut "arcaneM11") identifiant de connexion à /admin
-//   ADMIN_PANEL_PASSWORD  (obligatoire pour activer /admin, 12+ caractères) mot de passe de connexion à /admin
-//
-// 🖥️ Chaque worker doit définir : SERVER_URL, ADMIN_KEY (même valeur) et SERVER_ID (1, 2, 3 ou 4)
+// petit, trouve toi du taff mon frère au lieu de copier 
 
 const express = require('express');
 const fs = require('fs');
