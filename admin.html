@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="robots" content="noindex, nofollow">
+<title>HEXTECH — Panneau Administrateur</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+  body {
+    background-color: #080a10;
+    color: #e2e8f0;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  #techBackground {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, #0a1428 0%, #060810 70%, #04060c 100%);
+  }
+
+  /* ==================== ÉCRAN DE CONNEXION ==================== */
+  #loginScreen {
+    position: relative; z-index: 1;
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .login-card {
+    width: 100%; max-width: 380px;
+    background: #0f131a;
+    border: 1px solid #1e2532;
+    border-radius: 16px;
+    padding: 36px 32px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 40px rgba(0,200,255,0.08);
+  }
+  .login-logo {
+    text-align: center; margin-bottom: 6px;
+    font-size: 1.8rem; font-weight: 900; letter-spacing: 2px;
+    background: linear-gradient(135deg, #00c8ff 0%, #4a90ff 35%, #7b2ff7 70%, #00e5ff 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+    text-transform: uppercase;
+  }
+  .login-sub {
+    text-align: center; font-size: 0.78rem; color: #64748b; margin-bottom: 28px;
+    text-transform: uppercase; letter-spacing: 1.5px;
+  }
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block; font-size: 0.72rem; color: #94a3b8; margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+  }
+  .field input {
+    width: 100%; background: #080a10; border: 1px solid #1e2532; color: #e2e8f0;
+    padding: 12px 14px; border-radius: 8px; font-size: 0.9rem; outline: none;
+    transition: border-color .2s ease, box-shadow .2s ease;
+  }
+  .field input:focus { border-color: #00c8ff; box-shadow: 0 0 0 3px rgba(0,200,255,0.12); }
+  .btn-primary {
+    width: 100%; margin-top: 6px;
+    background: linear-gradient(135deg, #00c8ff 0%, #7b2ff7 100%);
+    color: #fff; border: none; padding: 13px; border-radius: 8px;
+    font-size: 0.88rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+    cursor: pointer; transition: all .25s ease;
+  }
+  .btn-primary:hover { box-shadow: 0 0 25px rgba(0,200,255,0.4); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+  .login-error {
+    display: none; margin-top: 14px; padding: 10px 12px; border-radius: 8px;
+    background: rgba(255,0,110,0.1); border: 1px solid rgba(255,0,110,0.3);
+    color: #ff6b9d; font-size: 0.8rem; text-align: center;
+  }
+
+  /* ==================== DASHBOARD ==================== */
+  #dashboard { display: none; position: relative; z-index: 1; padding: 20px; }
+  .main-wrapper { width: 100%; max-width: 1200px; margin: 0 auto; }
+
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;
+    margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid #1e2532;
+  }
+  .topbar h1 {
+    font-size: 1.3rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 10px;
+  }
+  .topbar h1 .dot { width: 9px; height: 9px; border-radius: 50%; background: #00ff80; box-shadow: 0 0 10px #00ff80; }
+  .topbar .who { font-size: 0.78rem; color: #64748b; margin-top: 3px; }
+  .btn-logout {
+    background: rgba(255,0,110,0.1); color: #ff006e; border: 1px solid rgba(255,0,110,0.3);
+    padding: 9px 18px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+    transition: all .2s ease;
+  }
+  .btn-logout:hover { background: #ff006e; color: #fff; }
+
+  .section-title {
+    font-size: 0.8rem; font-weight: 700; color: #00c8ff; text-transform: uppercase;
+    letter-spacing: 1px; margin: 28px 0 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .section-title::before { content: ''; width: 3px; height: 14px; background: linear-gradient(180deg,#00c8ff,#7b2ff7); border-radius: 2px; }
+  .section-title .count {
+    background: #1e2532; color: #94a3b8; font-size: 0.68rem; padding: 2px 9px; border-radius: 20px; font-weight: 600;
+  }
+
+  /* Cartes serveurs */
+  .servers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .server-card { background: #0f131a; border: 1px solid #1e2532; border-radius: 12px; padding: 16px; transition: all .3s ease; }
+  .server-card.offline { opacity: 0.55; }
+  .server-card .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .server-card .name { font-weight: 700; color: #fff; font-size: 0.9rem; }
+  .status-badge { font-size: 0.65rem; padding: 3px 9px; border-radius: 20px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; text-transform: uppercase; }
+  .status-badge.online { background: rgba(0,255,128,0.1); color: #00ff80; border: 1px solid rgba(0,255,128,0.25); }
+  .status-badge.offline { background: rgba(100,116,139,0.1); color: #64748b; border: 1px solid rgba(100,116,139,0.25); }
+  .status-badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .metric-row { display: flex; justify-content: space-between; font-size: 0.72rem; color: #64748b; margin-bottom: 4px; }
+  .metric-row b { color: #e2e8f0; font-weight: 600; }
+  .progress-bar { width: 100%; height: 4px; background: #1e2532; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
+  .progress-fill { height: 100%; border-radius: 4px; transition: width .5s ease; }
+  .fill-cpu { background: #00c8ff; }
+  .fill-ram { background: #7b2ff7; }
+  .server-foot { display: flex; justify-content: space-between; font-size: 0.68rem; color: #475569; margin-top: 10px; padding-top: 10px; border-top: 1px solid #1e2532; }
+
+  /* Barre d'outils utilisateurs */
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .toolbar input[type="text"] {
+    flex: 1; min-width: 220px; background: #0f131a; border: 1px solid #1e2532; color: #e2e8f0;
+    padding: 10px 14px; border-radius: 8px; font-size: 0.82rem; outline: none;
+  }
+  .toolbar input[type="text"]:focus { border-color: #00c8ff; }
+  .btn-refresh {
+    background: rgba(0,200,255,0.1); color: #00c8ff; border: 1px solid rgba(0,200,255,0.3);
+    padding: 10px 16px; border-radius: 8px; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+  }
+  .btn-refresh:hover { background: #00c8ff; color: #fff; }
+
+  /* Tableau utilisateurs */
+  .table-wrap { background: #0f131a; border: 1px solid #1e2532; border-radius: 12px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  thead th {
+    text-align: left; padding: 12px 14px; background: #080a10; color: #64748b;
+    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;
+    border-bottom: 1px solid #1e2532; white-space: nowrap;
+  }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid #161b26; color: #cbd5e1; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #121823; }
+  .mono { font-family: 'SF Mono', 'Consolas', monospace; font-size: 0.78rem; color: #94a3b8; }
+  .pill { font-size: 0.65rem; padding: 3px 9px; border-radius: 20px; font-weight: 700; text-transform: uppercase; display: inline-block; }
+  .pill.connected { background: rgba(0,255,128,0.1); color: #00ff80; border: 1px solid rgba(0,255,128,0.25); }
+  .pill.pending { background: rgba(255,149,0,0.1); color: #ff9500; border: 1px solid rgba(255,149,0,0.25); }
+  .pill.disconnect_requested { background: rgba(123,47,247,0.1); color: #a98bfa; border: 1px solid rgba(123,47,247,0.25); }
+  .pill.disconnected { background: rgba(100,116,139,0.1); color: #64748b; border: 1px solid rgba(100,116,139,0.25); }
+  .pill.error { background: rgba(255,0,110,0.1); color: #ff006e; border: 1px solid rgba(255,0,110,0.25); }
+  .row-actions { display: flex; gap: 6px; }
+  .btn-sm {
+    border: none; padding: 7px 12px; border-radius: 6px; font-size: 0.7rem; font-weight: 700;
+    cursor: pointer; text-transform: uppercase; letter-spacing: 0.3px; transition: all .2s ease;
+  }
+  .btn-disconnect { background: rgba(255,149,0,0.12); color: #ff9500; border: 1px solid rgba(255,149,0,0.3); }
+  .btn-disconnect:hover { background: #ff9500; color: #fff; }
+  .btn-delete { background: rgba(255,0,110,0.12); color: #ff006e; border: 1px solid rgba(255,0,110,0.3); }
+  .btn-delete:hover { background: #ff006e; color: #fff; }
+  .empty-state { padding: 40px 20px; text-align: center; color: #475569; font-size: 0.85rem; }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #0f131a; border: 1px solid #1e2532; color: #e2e8f0; padding: 12px 22px;
+    border-radius: 10px; font-size: 0.82rem; z-index: 2000; opacity: 0; pointer-events: none;
+    transition: all .25s ease; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.ok { border-color: rgba(0,255,128,0.4); }
+  #toast.err { border-color: rgba(255,0,110,0.4); }
+
+  @media (max-width: 640px) {
+    .table-wrap { overflow-x: auto; }
+    table { min-width: 720px; }
+  }
+</style>
+</head>
+<body>
+<div id="techBackground"></div>
+
+<!-- ==================== ÉCRAN DE CONNEXION ==================== -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">HEXTECH</div>
+    <div class="login-sub">Panneau Administrateur</div>
+    <form id="loginForm">
+      <div class="field">
+        <label>Identifiant</label>
+        <input type="text" id="loginUsername" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label>Mot de passe</label>
+        <input type="password" id="loginPassword" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn-primary" id="loginBtn">Se connecter</button>
+      <div class="login-error" id="loginError"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== DASHBOARD ==================== -->
+<div id="dashboard">
+  <div class="main-wrapper">
+    <div class="topbar">
+      <div>
+        <h1><span class="dot"></span> Panneau Administrateur</h1>
+        <div class="who">Connecté en tant que <b id="whoami">—</b></div>
+      </div>
+      <button class="btn-logout" id="logoutBtn">↪ Déconnexion</button>
+    </div>
+
+    <div class="section-title">Serveurs <span class="count" id="serversCount">0</span></div>
+    <div class="servers-grid" id="serversGrid"></div>
+
+    <div class="section-title">Utilisateurs <span class="count" id="usersCount">0</span></div>
+    <div class="toolbar">
+      <input type="text" id="searchInput" placeholder="🔍 Rechercher par numéro ou IP...">
+      <button class="btn-refresh" id="refreshBtn">↻ Actualiser</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Téléphone</th>
+            <th>Statut</th>
+            <th>Serveur</th>
+            <th>Adresse IP</th>
+            <th>Connecté le</th>
+            <th>Créé le</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="usersBody"></tbody>
+      </table>
+      <div class="empty-state" id="usersEmpty" style="display:none;">Aucun utilisateur pour l'instant.</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  const API_URL = ''; // même origine que ce fichier (server.js sert aussi /api/*)
+  const TOKEN_KEY = 'hextech_admin_token';
+
+  let allUsers = [];
+  let refreshTimer = null;
+
+  // ---------- Jeton de session ----------
+  function getToken() { return sessionStorage.getItem(TOKEN_KEY); }
+  function setToken(t) { sessionStorage.setItem(TOKEN_KEY, t); }
+  function clearToken() { sessionStorage.removeItem(TOKEN_KEY); }
+
+  function authHeaders() {
+    const t = getToken();
+    return t ? { 'Authorization': 'Bearer ' + t } : {};
+  }
+
+  // ---------- UI helpers ----------
+  function showToast(msg, type) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'show ' + (type || '');
+    setTimeout(() => { el.className = ''; }, 2600);
+  }
+
+  function fmtDate(ts) {
+    if (!ts) return '—';
+    try { return new Date(ts).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }); }
+    catch (e) { return '—'; }
+  }
+
+  function statusLabel(s) {
+    const map = {
+      connected: 'Connecté', pending: 'En attente',
+      disconnect_requested: 'Déconnexion...', disconnected: 'Déconnecté', error: 'Erreur'
+    };
+    return map[s] || s || '—';
+  }
+
+  function showLogin(message) {
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    const errEl = document.getElementById('loginError');
+    if (message) { errEl.textContent = message; errEl.style.display = 'block'; }
+    else { errEl.style.display = 'none'; }
+  }
+
+  function showDashboard() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('whoami').textContent = (window.__adminUsername || '—');
+    loadAll();
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(loadAll, 5000);
+  }
+
+  // ---------- Authentification ----------
+  async function handleLogin(e) {
+    e.preventDefault();
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true; btn.textContent = 'Connexion...';
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.success) {
+        showLogin(data.error || 'Connexion impossible');
+        return;
+      }
+
+      setToken(data.token);
+      window.__adminUsername = username;
+      showDashboard();
+    } catch (err) {
+      showLogin('Impossible de contacter le serveur');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Se connecter';
+    }
+  }
+
+  async function checkSession() {
+    const t = getToken();
+    if (!t) { showLogin(); return; }
+    try {
+      const res = await fetch(`${API_URL}/api/admin/me`, { headers: authHeaders(), credentials: 'omit' });
+      if (!res.ok) { clearToken(); showLogin(); return; }
+      const data = await res.json();
+      window.__adminUsername = data.username;
+      showDashboard();
+    } catch (e) {
+      showLogin();
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch(`${API_URL}/api/admin/logout`, { method: 'POST', headers: authHeaders(), credentials: 'omit' });
+    } catch (e) {}
+    clearToken();
+    showLogin();
+  }
+
+  // ---------- Chargement des données ----------
+  async function loadAll() {
+    await Promise.all([loadServers(), loadUsers()]);
+  }
+
+  async function loadServers() {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/servers`, { headers: authHeaders(), credentials: 'omit' });
+      if (res.status === 401) { clearToken(); showLogin('Session expirée, reconnectez-vous.'); return; }
+      const data = await res.json();
+      renderServers(data.servers || []);
+    } catch (e) {}
+  }
+
+  async function loadUsers() {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/users`, { headers: authHeaders(), credentials: 'omit' });
+      if (res.status === 401) { clearToken(); showLogin('Session expirée, reconnectez-vous.'); return; }
+      const data = await res.json();
+      allUsers = data.users || [];
+      renderUsers();
+    } catch (e) {}
+  }
+
+  // ---------- Rendu ----------
+  function renderServers(servers) {
+    const grid = document.getElementById('serversGrid');
+    document.getElementById('serversCount').textContent = servers.length;
+    grid.innerHTML = servers.map(s => {
+      const uptimeH = s.uptime ? Math.floor(s.uptime / 3600) : 0;
+      const uptimeM = s.uptime ? Math.floor((s.uptime % 3600) / 60) : 0;
+      const lastSeen = s.lastSeen ? fmtDate(s.lastSeen) : 'jamais';
+      return `
+        <div class="server-card ${s.online ? '' : 'offline'}">
+          <div class="card-head">
+            <span class="name">🖥️ Serveur ${s.id}</span>
+            <span class="status-badge ${s.online ? 'online' : 'offline'}">${s.online ? 'En ligne' : 'Hors ligne'}</span>
+          </div>
+          <div class="metric-row"><span>Utilisateurs</span><b>${s.current}/${s.max}</b></div>
+          <div class="metric-row"><span>CPU</span><b>${s.cpu}%</b></div>
+          <div class="progress-bar"><div class="progress-fill fill-cpu" style="width:${s.cpu}%"></div></div>
+          <div class="metric-row"><span>RAM</span><b>${s.ram}%</b></div>
+          <div class="progress-bar"><div class="progress-fill fill-ram" style="width:${s.ram}%"></div></div>
+          <div class="server-foot">
+            <span>⏱ ${s.online ? (uptimeH + 'h ' + uptimeM + 'm') : '—'}</span>
+            <span>Vu: ${lastSeen}</span>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function renderUsers() {
+    const q = document.getElementById('searchInput').value.trim().toLowerCase();
+    const filtered = q
+      ? allUsers.filter(u => (u.phone || '').toLowerCase().includes(q) || (u.ip || '').toLowerCase().includes(q))
+      : allUsers;
+
+    document.getElementById('usersCount').textContent = allUsers.length;
+    const body = document.getElementById('usersBody');
+    const empty = document.getElementById('usersEmpty');
+
+    if (filtered.length === 0) {
+      body.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+
+    body.innerHTML = filtered.map(u => `
+      <tr>
+        <td class="mono">+${escapeHtml(u.phone)}</td>
+        <td><span class="pill ${escapeHtml(u.status || '')}">${escapeHtml(statusLabel(u.status))}</span></td>
+        <td>${u.serverId != null ? 'Serveur ' + u.serverId : '—'}</td>
+        <td class="mono">${escapeHtml(u.ip || '—')}</td>
+        <td>${fmtDate(u.connectedAt)}</td>
+        <td>${fmtDate(u.createdAt)}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn-sm btn-disconnect" data-act="disc" data-phone="${escapeHtml(u.phone)}">Déconnecter</button>
+            <button class="btn-sm btn-delete" data-act="del" data-phone="${escapeHtml(u.phone)}">Supprimer</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  // ---------- Actions ----------
+  async function disconnectUser(phone) {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/users/${encodeURIComponent(phone)}/disconnect`, {
+        method: 'POST', headers: authHeaders(), credentials: 'omit'
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(data.error || 'Échec de la déconnexion', 'err'); return; }
+      showToast(`Déconnexion demandée pour +${phone}`, 'ok');
+      loadUsers();
+    } catch (e) { showToast('Erreur réseau', 'err'); }
+  }
+
+  async function deleteUser(phone) {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/users/${encodeURIComponent(phone)}`, {
+        method: 'DELETE', headers: authHeaders(), credentials: 'omit'
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(data.error || 'Échec de la suppression', 'err'); return; }
+      showToast(`Utilisateur +${phone} supprimé`, 'ok');
+      loadUsers();
+    } catch (e) { showToast('Erreur réseau', 'err'); }
+  }
+
+  // ---------- Événements ----------
+  document.getElementById('loginForm').addEventListener('submit', handleLogin);
+  document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+  document.getElementById('refreshBtn').addEventListener('click', loadAll);
+  document.getElementById('searchInput').addEventListener('input', renderUsers);
+
+  document.getElementById('usersBody').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const phone = btn.getAttribute('data-phone');
+    if (btn.getAttribute('data-act') === 'disc') {
+      if (confirm(`Déconnecter le numéro +${phone} ?`)) disconnectUser(phone);
+    } else if (btn.getAttribute('data-act') === 'del') {
+      if (confirm(`Supprimer DÉFINITIVEMENT +${phone} ? Cette action est irréversible.\n\nConseil : déconnecte d'abord ce numéro pour que le bot ferme proprement la session WhatsApp.`)) {
+        deleteUser(phone);
+      }
+    }
+  });
+
+  // ---------- Démarrage ----------
+  checkSession();
+})();
+</script>
+</body>
+</html>
