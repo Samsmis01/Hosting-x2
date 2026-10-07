@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>HEXTECH — Dashboard de Couplage</title>
+  <!-- 📊 LIBRAIRIE CHART.JS POUR LE GRAPHIQUE DE COURBES -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    /* ⚡ RESET & BASE */
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    
+    body {
+      background-color: #080a10;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* 🆕 ANIMATION TECHNOLOGIQUE DARK BLUE EN ARRIÈRE-PLAN */
+    #techBackground {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, #0a1428 0%, #060810 70%, #04060c 100%);
+    }
+
+    /* 🆕 WRAPPER PRINCIPAL : empile le titre PUIS le dashboard verticalement */
+    .main-wrapper {
+      width: 100%;
+      max-width: 1200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* 🆕 TITRE HEXTECH GÉANT EN HAUT, CENTRÉ, DÉGRADÉ BLEU */
+    .hero-title {
+      width: 100%;
+      text-align: center;
+      padding: 20px 10px 30px;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .hero-title h1 {
+      font-size: clamp(2.5rem, 12vw, 7rem);
+      font-weight: 900;
+      letter-spacing: 4px;
+      line-height: 1;
+      background: linear-gradient(135deg, #00c8ff 0%, #4a90ff 35%, #7b2ff7 70%, #00e5ff 100%);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+      text-transform: uppercase;
+      animation: gradientMove 6s ease infinite;
+      filter: drop-shadow(0 0 25px rgba(0, 200, 255, 0.35));
+      font-family: 'Inter', sans-serif;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+    @keyframes gradientMove {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .hero-title .hero-glow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 70%;
+      height: 100%;
+      background: radial-gradient(ellipse, rgba(0, 200, 255, 0.15) 0%, transparent 70%);
+      filter: blur(40px);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    /* 📦 LAYOUT PRINCIPAL (DASHBOARD) */
+    .dashboard {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      position: relative;
+    }
+
+    /* 🟢 HEADER */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+    .header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header p {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    /* 🆕 BOUTON EN SAVOIR PLUS (HAUT GAUCHE) */
+    .top-left-bar {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    .btn-about {
+      background: linear-gradient(135deg, rgba(0, 200, 255, 0.15) 0%, rgba(123, 47, 247, 0.15) 100%);
+      color: #00c8ff;
+      border: 1px solid #00c8ff;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .btn-about:hover {
+      background: linear-gradient(135deg, #00c8ff 0%, #7b2ff7 100%);
+      color: #ffffff;
+      box-shadow: 0 0 20px rgba(0, 200, 255, 0.4);
+      transform: translateY(-1px);
+    }
+    .btn-about .icon-info {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(0, 200, 255, 0.2);
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+
+    /* 🆕 MODALE EN SAVOIR PLUS */
+    .about-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 6, 10, 0.85);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+    .about-overlay.active {
+      display: flex;
+      opacity: 1;
+    }
+    .about-modal {
+      background: #0f131a;
+      border: 1px solid #1e2532;
+      border-radius: 16px;
+      max-width: 720px;
+      width: 100%;
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 30px 32px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 200, 255, 0.08);
+      animation: modalIn 0.35s ease;
+      position: relative;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: translateY(20px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .about-modal::-webkit-scrollbar { width: 6px; }
+    .about-modal::-webkit-scrollbar-track { background: #0f131a; }
+    .about-modal::-webkit-scrollbar-thumb { background: #1e2532; border-radius: 6px; }
+    .about-modal::-webkit-scrollbar-thumb:hover { background: #2d3748; }
+
+    .about-modal h2 {
+      font-size: 1.4rem;
+      color: #ffffff;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .about-modal h2 .badge-ai {
+      font-size: 0.65rem;
+      background: linear-gradient(135deg, #00c8ff, #7b2ff7);
+      color: #ffffff;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .about-subtitle {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid #1e2532;
+      line-height: 1.6;
+    }
+
+    .about-section {
+      margin-bottom: 24px;
+    }
+    .about-section h3 {
+      font-size: 0.95rem;
+      color: #00c8ff;
+      font-weight: 600;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .about-section h3::before {
+      content: '';
+      width: 3px;
+      height: 16px;
+      background: linear-gradient(180deg, #00c8ff, #7b2ff7);
+      border-radius: 2px;
+    }
+    .about-section p {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      line-height: 1.7;
+      margin-bottom: 8px;
+    }
+
+    .about-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .about-list li {
+      font-size: 0.83rem;
+      color: #cbd5e1;
+      line-height: 1.6;
+      padding: 10px 14px;
+      background: #080a10;
+      border: 1px solid #1e2532;
+      border-radius: 8px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      transition: border-color 0.2s ease;
+    }
+    .about-list li:hover {
+      border-color: #2d3748;
+    }
+    .about-list li .bullet {
+      color: #00c8ff;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .about-list li strong {
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .about-grid-services {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .service-card {
+      background: #080a10;
+      border: 1px solid #1e2532;
+      border-radius: 10px;
+      padding: 14px;
+      transition: all 0.25s ease;
+    }
+    .service-card:hover {
+      border-color: #00c8ff;
+      box-shadow: 0 0 15px rgba(0, 200, 255, 0.1);
+      transform: translateY(-2px);
+    }
+    .service-card .service-icon {
+      font-size: 1.3rem;
+      margin-bottom: 8px;
+      display: block;
+    }
+    .service-card .service-title {
+      font-size: 0.85rem;
+      color: #ffffff;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .service-card .service-desc {
+      font-size: 0.75rem;
+      color: #64748b;
+      line-height: 1.5;
+    }
+
+    /* BOUTON FERMER */
+    .about-close-wrapper {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 10px;
+      padding-top: 20px;
+      border-top: 1px solid #1e2532;
+    }
+    .btn-close-about {
+      background: #ff006e;
+      color: #ffffff;
+      border: none;
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.25s ease;
+    }
+    .btn-close-about:hover {
+      background: #ff2d85;
+      box-shadow: 0 0 20px rgba(255, 0, 110, 0.4);
+      transform: translateY(-1px);
+    }
+
+    /* 🔵 STATS CARDS */
+    .stats-container {
+      display: flex;
+      gap: 12px;
+    }
+    .stat-card {
+      background: #0f131a;
+      border: 1px solid #1e2532;
+      border-radius: 8px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .stat-icon { font-size: 1.2rem; }
+    .stat-info { display: flex; flex-direction: column; }
+    .stat-value { font-size: 1.1rem; font-weight: bold; color: #ffffff; }
+    .stat-label { font-size: 0.65rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* 🎛️ GRILLE DES SERVEURS */
+    .servers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 15px;
+    }
+
+    /* 🗂️ CARTE SERVEUR */
+    .server-card {
+      background: #0f131a;
+      border: 1px solid #1e2532;
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      transition: all 0.3s ease;
+    }
+    .server-card.full { border-color: #ff006e; box-shadow: 0 0 15px rgba(255, 0, 110, 0.1); }
+    .server-card.offline { opacity: 0.5; }
+
+    .card-header { display: flex; justify-content: space-between; align-items: center; }
+    .server-title { display: flex; align-items: center; gap: 10px; font-size: 0.95rem; font-weight: 600; color: #ffffff; }
+    .server-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+    .icon-web { background: rgba(0, 200, 255, 0.1); color: #00c8ff; }
+    .icon-db { background: rgba(123, 47, 247, 0.1); color: #7b2ff7; }
+    .icon-game { background: rgba(0, 255, 128, 0.1); color: #00ff80; }
+    .icon-app { background: rgba(255, 149, 0, 0.1); color: #ff9500; }
+
+    .status-badge { font-size: 0.7rem; padding: 4px 10px; border-radius: 20px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+    .status-badge.online { background: rgba(0, 255, 128, 0.1); color: #00ff80; border: 1px solid rgba(0, 255, 128, 0.2); }
+    .status-badge.full { background: rgba(255, 0, 110, 0.1); color: #ff006e; border: 1px solid rgba(255, 0, 110, 0.2); }
+    .status-badge.offline { background: rgba(100, 116, 139, 0.1); color: #64748b; border: 1px solid rgba(100, 116, 139, 0.2); }
+    .status-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    .card-body { display: flex; flex-direction: column; gap: 12px; }
+    .metric-row { display: flex; justify-content: space-between; font-size: 0.75rem; color: #64748b; margin-bottom: 4px; }
+    .metric-row span:last-child { color: #e2e8f0; font-weight: 500; }
+    .progress-bar { width: 100%; height: 4px; background: #1e2532; border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+    .fill-green { background: #00ff80; }
+    .fill-blue { background: #00c8ff; }
+    .fill-purple { background: #7b2ff7; }
+
+    .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; padding-top: 15px; border-top: 1px solid #1e2532; }
+    .uptime { font-size: 0.75rem; color: #64748b; display: flex; align-items: center; gap: 5px; }
+    .uptime::before { content: '🕒'; font-size: 0.8rem; }
+
+    .btn-select {
+      background: #1e2532; color: #e2e8f0; border: 1px solid #2d3748;
+      padding: 8px 16px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease;
+    }
+    .btn-select:hover:not(:disabled) { background: #00c8ff; color: #080a10; border-color: #00c8ff; box-shadow: 0 0 15px rgba(0, 200, 255, 0.4); }
+    .btn-select.selected { background: #00c8ff; color: #080a10; border-color: #00c8ff; box-shadow: 0 0 15px rgba(0, 200, 255, 0.4); }
+    .btn-select:disabled { background: #1e2532; color: #4a5568; cursor: not-allowed; border-color: #2d3748; }
+
+    /* 📊 SECTION GRAPHIQUE RÉEL */
+    .bottom-section { display: grid; grid-template-columns: 2fr 1fr; gap: 15px; }
+    @media (max-width: 768px) { .bottom-section { grid-template-columns: 1fr; } }
+
+    .panel { background: #0f131a; border: 1px solid #1e2532; border-radius: 12px; padding: 18px; }
+    .panel-title { font-size: 0.85rem; color: #ffffff; font-weight: 600; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+    .panel-legend { display: flex; gap: 10px; font-size: 0.7rem; }
+    .legend-item { display: flex; align-items: center; gap: 4px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot-blue { background: #00c8ff; } .dot-purple { background: #7b2ff7; } .dot-orange { background: #ff9500; } .dot-green { background: #00ff80; }
+
+    /* Graphique Chart.js */
+    .chart-container {
+      height: 180px;
+      width: 100%;
+      position: relative;
+    }
+
+    /* Activité */
+    .activity-list { display: flex; flex-direction: column; gap: 12px; }
+    .activity-item { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; }
+    .activity-dot { width: 8px; height: 8px; border-radius: 50%; background: #00ff80; }
+    .activity-text { color: #94a3b8; flex: 1; }
+    .activity-time { color: #64748b; font-size: 0.7rem; }
+
+    /* 📝 FORMULAIRE DE COUPLAGE */
+    .form-panel {
+      background: #0f131a; border: 1px solid #1e2532; border-radius: 12px; padding: 25px;
+      display: flex; flex-direction: column; gap: 15px; animation: slideUp 0.5s ease;
+    }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    
+    .form-panel h2 { font-size: 1.1rem; color: #00c8ff; margin-bottom: 5px; }
+    .form-panel p { font-size: 0.8rem; color: #64748b; }
+    
+    input[type="tel"] {
+      width: 100%; padding: 14px; background: #080a10; border: 1px solid #1e2532;
+      border-radius: 8px; color: #e2e8f0; font-size: 0.95rem; font-family: monospace;
+    }
+    input[type="tel"]:focus { outline: none; border-color: #00c8ff; box-shadow: 0 0 0 2px rgba(0, 200, 255, 0.1); }
+
+    .checkbox-group { display: flex; gap: 10px; align-items: flex-start; font-size: 0.8rem; color: #94a3b8; }
+    .checkbox-group input { margin-top: 3px; accent-color: #00c8ff; }
+
+    .btn-submit {
+      background: linear-gradient(135deg, #00c8ff 0%, #7b2ff7 100%);
+      color: #ffffff; border: none; padding: 15px; border-radius: 8px;
+      font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease;
+    }
+    .btn-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0, 200, 255, 0.3); }
+    .btn-submit:disabled { background: #1e2532; color: #4a5568; cursor: not-allowed; }
+
+    .result-box { display: none; padding: 20px; background: rgba(0, 200, 255, 0.05); border: 1px solid #00c8ff; border-radius: 8px; margin-top: 10px; text-align: center; }
+    .result-box.show { display: block; }
+    .code-display { font-size: 2.5rem; font-weight: bold; color: #00e5ff; letter-spacing: 8px; margin: 15px 0; font-family: monospace; }
+    
+    .error-msg { display: none; color: #ff006e; font-size: 0.85rem; padding: 10px; background: rgba(255, 0, 110, 0.1); border-radius: 6px; border: 1px solid #ff006e; }
+    .error-msg.show { display: block; }
+    .info-msg { display: none; color: #00c8ff; font-size: 0.85rem; padding: 10px; background: rgba(0, 200, 255, 0.1); border-radius: 6px; border: 1px solid #00c8ff; }
+    .info-msg.show { display: block; }
+
+    .action-buttons { display: flex; gap: 10px; margin-top: 15px; }
+    .action-buttons button { flex: 1; padding: 10px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; }
+    .btn-check { background: #1e2532; color: #e2e8f0; }
+    .btn-disconnect { background: #ff006e; color: #fff; }
+
+    /* 🆕 FOOTER (TELEGRAM + WHATSAPP + CREDIT) */
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 15px;
+      padding: 18px 20px;
+      background: #0f131a;
+      border: 1px solid #1e2532;
+      border-radius: 12px;
+      margin-top: 10px;
+    }
+    .footer-socials {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .social-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.25s ease;
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+    .social-btn svg {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+    .social-btn.telegram {
+      background: rgba(0, 136, 204, 0.1);
+      color: #29b6f6;
+      border-color: rgba(0, 136, 204, 0.4);
+    }
+    .social-btn.telegram:hover {
+      background: #0088cc;
+      color: #ffffff;
+      border-color: #0088cc;
+      box-shadow: 0 0 20px rgba(0, 136, 204, 0.45);
+      transform: translateY(-2px);
+    }
+    .social-btn.whatsapp {
+      background: rgba(37, 211, 102, 0.1);
+      color: #25d366;
+      border-color: rgba(37, 211, 102, 0.4);
+    }
+    .social-btn.whatsapp:hover {
+      background: #25d366;
+      color: #080a10;
+      border-color: #25d366;
+      box-shadow: 0 0 20px rgba(37, 211, 102, 0.45);
+      transform: translateY(-2px);
+    }
+    .footer-credit {
+      font-size: 0.82rem;
+      color: #64748b;
+      letter-spacing: 0.5px;
+    }
+    .footer-credit strong {
+      color: #00c8ff;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    /* 📱 RESPONSIVE MOBILE */
+    @media (max-width: 600px) {
+      body { padding: 12px; }
+      .footer { flex-direction: column; align-items: stretch; text-align: center; }
+      .footer-socials { justify-content: center; }
+      .footer-credit { text-align: center; }
+      .hero-title { padding: 10px 5px 20px; }
+      .hero-title h1 { letter-spacing: 2px; }
+      .stats-container { width: 100%; justify-content: space-between; }
+      .stat-card { flex: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 🆕 CANVAS D'ANIMATION TECHNOLOGIQUE DARK BLUE -->
+  <canvas id="techBackground"></canvas>
+
+  <!-- 🆕 WRAPPER : titre PUIS dashboard, empilés verticalement -->
+  <div class="main-wrapper">
+
+    <!-- 🆕 TITRE HEXTECH GÉANT EN HAUT, CENTRÉ, DÉGRADÉ BLEU -->
+    <div class="hero-title">
+      <span class="hero-glow"></span>
+      <h1>HEXTECH</h1>
+    </div>
+
+    <div class="dashboard">
+      
+      <!-- HEADER -->
+      <header class="header">
+        <div class="top-left-bar">
+          <!-- 🆕 BOUTON EN SAVOIR PLUS -->
+          <button class="btn-about" id="btnAbout" type="button">
+            <span class="icon-info">i</span>
+            En savoir plus
+          </button>
+          <div>
+            <h1>𝗛𝗘𝗫𝗧𝗘𝗖𝗛 <span>🌐</span></h1>
+            <p>Vérifiez l'état des serveurs et générez votre code de couplage.</p>
+          </div>
+        </div>
+        <div class="stats-container">
+          <div class="stat-card">
+            <div class="stat-icon" style="color:#00c8ff">🖥️</div>
+            <div class="stat-info">
+              <span class="stat-value" id="activeServers">0</span>
+              <span class="stat-label">Serveurs actifs</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="color:#00ff80">👥</div>
+            <div class="stat-info">
+              <span class="stat-value" id="totalUsers">53</span>
+              <span class="stat-label">Utilisateurs liés</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- GRILLE DES 4 SERVEURS -->
+      <section class="servers-grid" id="serversGrid">
+        <!-- Les cartes seront injectées par Javascript -->
+      </section>
+
+      <!-- SECTION DU BAS (GRAPHIQUE RÉEL + ACTIVITÉ RÉELLE) -->
+      <section class="bottom-section">
+        <div class="panel">
+          <div class="panel-title">
+            ressources ♻️
+            <div class="panel-legend">
+              <span class="legend-item"><span class="dot dot-green"></span> CPU</span>
+              <span class="legend-item"><span class="dot dot-blue"></span> RAM</span>
+              <span class="legend-item"><span class="dot dot-purple"></span> Disque</span>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="realtimeChart"></canvas>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Activité récente</div>
+          <div class="activity-list" id="activityList">
+            <div class="activity-item">
+              <div class="activity-dot" style="background:#64748b"></div>
+              <span class="activity-text">En attente de données...</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FORMULAIRE DE COUPLAGE -->
+      <section class="form-panel" id="formPanel" style="display: none;">
+        <h2>🔗 Couplage sur le <span id="selectedServerName">Serveur 1</span></h2>
+        <p>Entrez votre numéro WhatsApp pour recevoir le code de couplage.</p>
+        
+        <input type="tel" id="phone" placeholder="243XXXXXXXXX" maxlength="15" pattern="[0-9]+">
+        
+        <div class="checkbox-group">
+          <input type="checkbox" id="consent">
+          <label for="consent">Je consens à coupler mon numéro. je peux me déconnecter à tout moment.</label>
+        </div>
+
+        <button class="btn-submit" id="pairBtn" disabled>Générer le code de couplage</button>
+        
+        <div class="error-msg" id="errorMsg"></div>
+        <div class="info-msg" id="infoMsg"></div>
+
+        <div class="result-box" id="resultBox">
+          <div style="font-size: 0.9rem; color: #00c8ff; text-transform: uppercase; letter-spacing: 2px;">Votre code de couplage</div>
+          <div class="code-display" id="codeDisplay">---</div>
+          <p style="font-size: 0.8rem; color: #64748b; line-height: 1.6;">
+            1. Ouvrez WhatsApp <br> 2. Paramètres → Appareils liés <br> 3. Lier un appareil → Lier avec un numéro <br> 4. Entrez le code ci-dessus
+          </p>
+          <div class="action-buttons">
+            <button class="btn-check" id="btnCheck" type="button">🔄 Vérifier statut</button>
+            <button class="btn-disconnect" id="btnDisconnect" type="button">🚪 Déconnecter</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 🆕 FOOTER : TELEGRAM + WHATSAPP + CREDIT -->
+      <footer class="footer">
+        <div class="footer-socials">
+          <!-- LOGO TELEGRAM -->
+          <a class="social-btn telegram" href="https://t.me/hextechcar" target="_blank" rel="noopener noreferrer" title="Rejoindre le canal Telegram">
+            <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+            </svg>
+            Canal Telegram
+          </a>
+
+          <!-- BOUTON CHAÎNE WHATSAPP -->
+          <a class="social-btn whatsapp" href="https://whatsapp.com/channel/0029VbBQb5b4Y9lwZ27BCn0o" target="_blank" rel="noopener noreferrer" title="Rejoindre la chaîne WhatsApp">
+            <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>
+            </svg>
+            Chaîne WhatsApp
+          </a>
+        </div>
+
+        <div class="footer-credit">
+          Développé par <strong>HEXTECH</strong>
+        </div>
+      </footer>
+
+    </div>
+  </div>
+
+  <!-- 🆕 MODALE EN SAVOIR PLUS (BAILEY) -->
+  <div class="about-overlay" id="aboutOverlay">
+    <div class="about-modal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+      <h2 id="aboutTitle">
+        🤖 Bot Bailey
+        <span class="badge-ai">IA</span>
+      </h2>
+      <p class="about-subtitle">
+        Bailey est un assistant intelligent de nouvelle génération conçu par HEXTECH. Il automatise, sécurise et optimise vos communications WhatsApp, que ce soit pour un usage personnel, un groupe ou une entreprise.
+      </p>
+
+      <!-- DÉFINITION -->
+      <div class="about-section">
+        <h3>📌 Définition</h3>
+        <p>
+          Bailey est un bot WhatsApp  avec 608 commandes intégré basé sur une architecture multi-appareils moderne. Il se couple à votre numéro via un code sécurisé, puis agit comme un assistant autonome capable de gérer des conversations, d'exécuter des commandes, de modérer des groupes et d'intégrer des services tiers — le tout sans interrompre votre utilisation normale de WhatsApp.
+        </p>
+      </div>
+
+      <!-- AVANTAGES -->
+      <div class="about-section">
+        <h3>💼 Avantages</h3>
+
+        <p style="margin-bottom:10px;"><strong style="color:#ffffff;">🏢 En entreprise</strong></p>
+        <ul class="about-list">
+          <li><span class="bullet">▸</span><span><strong>Support client automatisé :</strong> réponses instantanées 24h/24 et 7j/7.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Gestion de catalogue :</strong> présentation de produits, prix et disponibilités en direct.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Notifications internes :</strong> alertes, rappels et diffusion d'informations aux équipes.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Intégration CRM :</strong> connexion avec vos outils métiers (Sheets, Notion, ERP…).</span></li>
+        </ul>
+
+        <p style="margin:14px 0 10px;"><strong style="color:#ffffff;">👥 En groupe</strong></p>
+        <ul class="about-list">
+          <li><span class="bullet">▸</span><span><strong>Modération automatique :</strong> anti-spam, anti-lien, anti-flood.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Accueil des nouveaux :</strong> message de bienvenue et règles du groupe.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Commandes utiles :</strong> sondages, rappels, statistiques d'activité.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Gestion des admins :</strong> attribution de permissions et journal des actions.</span></li>
+        </ul>
+
+        <p style="margin:14px 0 10px;"><strong style="color:#ffffff;">👤 En compte personnel</strong></p>
+        <ul class="about-list">
+          <li><span class="bullet">▸</span><span><strong>Assistant personnel :</strong> rappels, notes, listes de tâches.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Auto-réponse :</strong> messages d'absence et réponses rapides programmées.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Sauvegarde de médias :</strong> archivage automatique de vos conversations importantes.</span></li>
+          <li><span class="bullet">▸</span><span><strong>Contrôle à distance :</strong> pilotez votre bot depuis n'importe quel appareil.</span></li>
+        </ul>
+      </div>
+
+      <!-- SERVICES -->
+      <div class="about-section">
+        <h3>🛠️ Services</h3>
+        <div class="about-grid-services">
+          <div class="service-card">
+            <span class="service-icon">🔗</span>
+            <div class="service-title">Couplage sécurisé</div>
+            <div class="service-desc">Connexion via code à usage unique, sans compromettre votre compte.</div>
+          </div>
+          <div class="service-card">
+            <span class="service-icon">⚡</span>
+            <div class="service-title">Temps réel</div>
+            <div class="service-desc">Monitoring live des serveurs, CPU, RAM et utilisateurs connectés.</div>
+          </div>
+          <div class="service-card">
+            <span class="service-icon">🤖</span>
+            <div class="service-title">Automatisation IA</div>
+            <div class="service-desc">Réponses intelligentes, commandes personnalisées et workflows.</div>
+          </div>
+          <div class="service-card">
+            <span class="service-icon">🛡️</span>
+            <div class="service-title">Sécurité & Modération</div>
+            <div class="service-desc">Protection anti-spam, anti-lien et contrôle des permissions.</div>
+          </div>
+          <div class="service-card">
+            <span class="service-icon">📊</span>
+            <div class="service-title">Statistiques</div>
+            <div class="service-desc">Rapports d'activité, analytics et suivi des performances.</div>
+          </div>
+          <div class="service-card">
+            <span class="service-icon">🔌</span>
+            <div class="service-title">Intégrations</div>
+            <div class="service-desc">Connexion à vos outils : Google Sheets, Notion, CRM, API tierces.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOUTON FERMER -->
+      <div class="about-close-wrapper">
+        <button class="btn-close-about" id="btnCloseAbout" type="button">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ⚠️ Si le site et le serveur sont sur le même domaine, laisse vide.
+    // Sinon, mets l'URL de ton serveur Render (ex: '')
+    const API_URL = 'https://last-judment.onrender.com'; 
+
+    // 🔢 VALEUR SIMULÉE pour le compteur "Utilisateurs liés" (en haut).
+    // Les cartes des serveurs gardent les vrais chiffres (ex: 9).
+    const SIMULATED_USERS = 53;
+
+    let currentPhone = null;
+    let currentCode = null;
+    let currentToken = null; // 🔐 jeton de session renvoyé par le serveur lors du couplage (si fourni)
+    let selectedServerId = null;
+    let currentServers = [];
+
+    // Références DOM
+    const serversGrid = document.getElementById('serversGrid');
+    const formPanel = document.getElementById('formPanel');
+    const selectedServerName = document.getElementById('selectedServerName');
+    const phoneInput = document.getElementById('phone');
+    const consentCheck = document.getElementById('consent');
+    const pairBtn = document.getElementById('pairBtn');
+    const errorMsg = document.getElementById('errorMsg');
+    const infoMsg = document.getElementById('infoMsg');
+    const resultBox = document.getElementById('resultBox');
+    const codeDisplay = document.getElementById('codeDisplay');
+    const activityList = document.getElementById('activityList');
+
+    // 🔐 Échappe tout texte venant du serveur avant de l'insérer dans le HTML (anti-XSS)
+    function esc(v) {
+      return String(v === undefined || v === null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    // 🔐 En-têtes d'authentification de l'utilisateur (jeton de couplage)
+    function authHeaders() {
+      return currentToken ? { 'Authorization': 'Bearer ' + currentToken } : {};
+    }
+
+    // 🆕 RÉFÉRENCES MODALE "EN SAVOIR PLUS"
+    const btnAbout = document.getElementById('btnAbout');
+    const aboutOverlay = document.getElementById('aboutOverlay');
+    const btnCloseAbout = document.getElementById('btnCloseAbout');
+
+    // 🆕 OUVERTURE / FERMETURE DE LA MODALE
+    function openAbout() {
+      aboutOverlay.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeAbout() {
+      aboutOverlay.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+    btnAbout.addEventListener('click', openAbout);
+    document.getElementById('btnCheck').addEventListener('click', () => checkStatus());
+    document.getElementById('btnDisconnect').addEventListener('click', () => disconnect());
+    btnCloseAbout.addEventListener('click', closeAbout);
+    aboutOverlay.addEventListener('click', (e) => {
+      if (e.target === aboutOverlay) closeAbout();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && aboutOverlay.classList.contains('active')) closeAbout();
+    });
+
+    // 🆕 ==================== ANIMATION TECHNOLOGIQUE DARK BLUE ====================
+    (function initTechBackground() {
+      const canvas = document.getElementById('techBackground');
+      const ctxBg = canvas.getContext('2d');
+      let width, height;
+      let particles = [];
+      const PARTICLE_COUNT = 80;
+      const MAX_DISTANCE = 150;
+      const COLORS = ['#00c8ff', '#1e6fff', '#0a4a99', '#00e5ff', '#3a7bd5'];
+
+      function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      }
+
+      function createParticles() {
+        particles = [];
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          particles.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: (Math.random() - 0.5) * 0.5,
+            radius: Math.random() * 2 + 1,
+            color: COLORS[Math.floor(Math.random() * COLORS.length)],
+            alpha: Math.random() * 0.6 + 0.3
+          });
+        }
+      }
+
+      // Grille technologique en perspective
+      let gridOffset = 0;
+
+      function drawGrid() {
+        ctxBg.save();
+        ctxBg.strokeStyle = 'rgba(0, 120, 255, 0.08)';
+        ctxBg.lineWidth = 1;
+        
+        const gridSize = 60;
+        // Lignes verticales
+        for (let x = 0; x < width; x += gridSize) {
+          ctxBg.beginPath();
+          ctxBg.moveTo(x, 0);
+          ctxBg.lineTo(x, height);
+          ctxBg.stroke();
+        }
+        // Lignes horizontales défilantes
+        for (let y = -gridSize + (gridOffset % gridSize); y < height; y += gridSize) {
+          ctxBg.beginPath();
+          ctxBg.moveTo(0, y);
+          ctxBg.lineTo(width, y);
+          ctxBg.stroke();
+        }
+        ctxBg.restore();
+      }
+
+      function drawParticles() {
+        for (let i = 0; i < particles.length; i++) {
+          const p = particles[i];
+          
+          // Déplacement
+          p.x += p.vx;
+          p.y += p.vy;
+          
+          // Rebond sur les bords
+          if (p.x < 0 || p.x > width) p.vx *= -1;
+          if (p.y < 0 || p.y > height) p.vy *= -1;
+          
+          // Dessiner la particule avec halo
+          ctxBg.beginPath();
+          ctxBg.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctxBg.fillStyle = p.color;
+          ctxBg.globalAlpha = p.alpha;
+          ctxBg.fill();
+          
+          // Halo lumineux
+          ctxBg.beginPath();
+          ctxBg.arc(p.x, p.y, p.radius * 3, 0, Math.PI * 2);
+          ctxBg.fillStyle = p.color;
+          ctxBg.globalAlpha = p.alpha * 0.15;
+          ctxBg.fill();
+          
+          // Connexions entre particules proches
+          for (let j = i + 1; j < particles.length; j++) {
+            const p2 = particles[j];
+            const dx = p.x - p2.x;
+            const dy = p.y - p2.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < MAX_DISTANCE) {
+              const opacity = (1 - dist / MAX_DISTANCE) * 0.35;
+              ctxBg.beginPath();
+              ctxBg.moveTo(p.x, p.y);
+              ctxBg.lineTo(p2.x, p2.y);
+              ctxBg.strokeStyle = `rgba(0, 150, 255, ${opacity})`;
+              ctxBg.lineWidth = 0.8;
+              ctxBg.globalAlpha = 1;
+              ctxBg.stroke();
+            }
+          }
+        }
+        ctxBg.globalAlpha = 1;
+      }
+
+      function animate() {
+        ctxBg.clearRect(0, 0, width, height);
+        
+        drawGrid();
+        drawParticles();
+        
+        gridOffset += 0.3;
+        
+        requestAnimationFrame(animate);
+      }
+
+      window.addEventListener('resize', () => {
+        resize();
+        createParticles();
+      });
+
+      resize();
+      createParticles();
+      animate();
+    })();
+    // 🆕 ==================== FIN ANIMATION ====================
+
+    // 📊 INITIALISATION DU GRAPHIQUE CHART.JS
+    const ctx = document.getElementById('realtimeChart').getContext('2d');
+    
+    // Création des dégradés pour les courbes
+    const gradientCpu = ctx.createLinearGradient(0, 0, 0, 180);
+    gradientCpu.addColorStop(0, 'rgba(0, 255, 128, 0.4)');
+    gradientCpu.addColorStop(1, 'rgba(0, 255, 128, 0)');
+
+    const gradientRam = ctx.createLinearGradient(0, 0, 0, 180);
+    gradientRam.addColorStop(0, 'rgba(0, 200, 255, 0.4)');
+    gradientRam.addColorStop(1, 'rgba(0, 200, 255, 0)');
+
+    const gradientDisk = ctx.createLinearGradient(0, 0, 0, 180);
+    gradientDisk.addColorStop(0, 'rgba(123, 47, 247, 0.4)');
+    gradientDisk.addColorStop(1, 'rgba(123, 47, 247, 0)');
+
+    const realtimeChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: Array(20).fill(''), // 20 points d'historique
+        datasets: [
+          {
+            label: 'CPU',
+            data: Array(20).fill(0),
+            borderColor: '#00ff80',
+            backgroundColor: gradientCpu,
+            borderWidth: 2,
+            tension: 0.4, // Courbe lisse
+            fill: true,
+            pointRadius: 0
+          },
+          {
+            label: 'RAM',
+            data: Array(20).fill(0),
+            borderColor: '#00c8ff',
+            backgroundColor: gradientRam,
+            borderWidth: 2,
+            tension: 0.4,
+            fill: true,
+            pointRadius: 0
+          },
+          {
+            label: 'Disque',
+            data: Array(20).fill(0),
+            borderColor: '#7b2ff7',
+            backgroundColor: gradientDisk,
+            borderWidth: 2,
+            tension: 0.4,
+            fill: true,
+            pointRadius: 0
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 0 }, // Pas d'animation pour un rendu instantané
+        plugins: {
+          legend: { display: false } // On utilise notre propre légende HTML
+        },
+        scales: {
+          x: { display: false }, // On cache les axes X
+          y: {
+            beginAtZero: true,
+            max: 100,
+            grid: { color: 'rgba(30, 37, 50, 0.5)', drawBorder: false },
+            ticks: { color: '#64748b', font: { size: 10 }, callback: v => v + '%' }
+          }
+        }
+      }
+    });
+
+    // Fonction pour mettre à jour le graphique avec les vraies données
+    function updateChart(cpu, ram, disk) {
+      // Ajoute la nouvelle valeur et retire la plus ancienne
+      realtimeChart.data.datasets[0].data.push(cpu);
+      realtimeChart.data.datasets[0].data.shift();
+      
+      realtimeChart.data.datasets[1].data.push(ram);
+      realtimeChart.data.datasets[1].data.shift();
+      
+      realtimeChart.data.datasets[2].data.push(disk);
+      realtimeChart.data.datasets[2].data.shift();
+      
+      realtimeChart.update();
+    }
+
+    // 🚀 CHARGEMENT DES SERVEURS EN TEMPS RÉEL
+    async function loadServers() {
+      try {
+        const res = await fetch(`${API_URL}/api/servers`, { credentials: 'omit' });
+        if (!res.ok) throw new Error('Erreur réseau');
+        
+        const data = await res.json();
+        currentServers = data.servers;
+        
+        renderServers(currentServers);
+      } catch (e) {
+        console.error("Erreur chargement serveurs:", e);
+        serversGrid.innerHTML = '<p style="color: #ff006e; text-align: center; grid-column: 1/-1;">Impossible de contacter le serveur maître. Vérifiez que Render est réveillé.</p>';
+        document.getElementById('activeServers').textContent = '0';
+        // Le compteur simulé reste affiché même si le serveur est injoignable
+        document.getElementById('totalUsers').textContent = SIMULATED_USERS;
+      }
+    }
+
+    // 🎨 AFFICHAGE DES CARTES
+    function renderServers(servers) {
+      serversGrid.innerHTML = '';
+      let activeCount = 0;
+      
+      let totalCpu = 0, totalRam = 0, totalDisk = 0;
+      let onlineServers = 0;
+
+      servers.forEach(srv => {
+        if (srv.online) {
+          activeCount++;
+          onlineServers++;
+          totalCpu += srv.cpu || 0;
+          totalRam += srv.ram || 0;
+          // On n'a pas le disque dans l'API, on met une valeur fictive basée sur le RAM pour l'exemple
+          totalDisk += (srv.ram || 0) * 0.8; 
+        }
+
+        const isFull = srv.current >= srv.max;
+        const isOffline = !srv.online;
+
+        let cardClass = '';
+        let badgeClass = '';
+        let badgeText = '';
+
+        if (isOffline) { cardClass = 'offline'; badgeClass = 'offline'; badgeText = 'Hors ligne'; }
+        else if (isFull) { cardClass = 'full'; badgeClass = 'full'; badgeText = 'Complet'; }
+        else { badgeClass = 'online'; badgeText = 'En ligne'; }
+
+        // ✅ Les cartes serveurs utilisent les VRAIS chiffres (srv.current / srv.max)
+        const usagePercent = (srv.current / srv.max) * 100;
+        
+        const icons = ['♻️', '🌐', '♻️', '🌐'];
+        const iconClasses = ['icon-web', 'icon-db', 'icon-game', 'icon-app'];
+        const icon = icons[srv.id - 1] || '🖥️';
+        const iconClass = iconClasses[srv.id - 1] || 'icon-web';
+
+        const card = document.createElement('div');
+        card.className = `server-card ${cardClass}`;
+        card.innerHTML = `
+          <div class="card-header">
+            <div class="server-title">
+              <div class="server-icon ${iconClass}">${icon}</div>
+              ${esc(srv.name)}
+            </div>
+            <div class="status-badge ${badgeClass}">${badgeText}</div>
+          </div>
+          
+          <div class="card-body">
+            <div>
+              <div class="metric-row"><span>Utilisateurs</span><span>${Number(srv.current) || 0}/${Number(srv.max) || 0}</span></div>
+              <div class="progress-bar"><div class="progress-fill fill-blue" style="width: ${usagePercent}%"></div></div>
+            </div>
+            <div>
+              <div class="metric-row"><span>CPU</span><span>${Number(srv.cpu) || 0}%</span></div>
+              <div class="progress-bar"><div class="progress-fill fill-green" style="width: ${Number(srv.cpu) || 0}%"></div></div>
+            </div>
+            <div>
+              <div class="metric-row"><span>RAM</span><span>${Number(srv.ram) || 0}%</span></div>
+              <div class="progress-bar"><div class="progress-fill fill-purple" style="width: ${Number(srv.ram) || 0}%"></div></div>
+            </div>
+          </div>
+
+          <div class="card-footer">
+            <div class="uptime">Actif</div>
+            <button class="btn-select" ${isOffline || isFull ? 'disabled' : ''} data-server-id="${Number(srv.id) || 0}">
+              ${isOffline || isFull ? 'Indisponible' : 'Sélectionner'}
+            </button>
+          </div>
+        `;
+        const selBtn = card.querySelector('.btn-select');
+        if (selBtn && !selBtn.disabled) {
+          selBtn.addEventListener('click', () => selectServer(Number(srv.id), String(srv.name)));
+        }
+        serversGrid.appendChild(card);
+      });
+
+      // 🔢 Compteur du haut : valeur SIMULÉE (53)
+      document.getElementById('totalUsers').textContent = SIMULATED_USERS;
+      document.getElementById('activeServers').textContent = activeCount;
+      
+      // Mettre à jour le graphique avec les moyennes
+      if (onlineServers > 0) {
+        updateChart(totalCpu / onlineServers, totalRam / onlineServers, totalDisk / onlineServers);
+      } else {
+        updateChart(0, 0, 0);
+      }
+
+      renderActivity();
+    }
+
+    // 📋 ACTIVITÉ RÉELLE (Basée sur les utilisateurs connectés)
+    function renderActivity() {
+      activityList.innerHTML = '';
+      
+      let hasActivity = false;
+      
+      currentServers.forEach(srv => {
+        if (srv.current > 0) {
+          hasActivity = true;
+          const item = document.createElement('div');
+          item.className = 'activity-item';
+          item.innerHTML = `
+            <div class="activity-dot" style="background: ${srv.online ? '#00ff80' : '#64748b'}"></div>
+            <span class="activity-text">${esc(srv.name)}</span>
+            <span class="activity-time">${Number(srv.current) || 0} user(s)</span>
+          `;
+          activityList.appendChild(item);
+        }
+      });
+
+      if (!hasActivity) {
+        activityList.innerHTML = `
+          <div class="activity-item">
+            <div class="activity-dot" style="background:#64748b"></div>
+            <span class="activity-text">Aucun utilisateur connecté</span>
+          </div>
+        `;
+      }
+    }
+
+    // 🖱️ SÉLECTIONNER UN SERVEUR
+    function selectServer(id, name) {
+      selectedServerId = id;
+      selectedServerName.textContent = name;
+      
+      formPanel.style.display = 'flex';
+      formPanel.scrollIntoView({ behavior: 'smooth' });
+      
+      document.querySelectorAll('.btn-select').forEach(btn => btn.classList.remove('selected'));
+      const buttons = document.querySelectorAll('.btn-select');
+      if (buttons[id - 1]) buttons[id - 1].classList.add('selected');
+
+      resultBox.classList.remove('show');
+      errorMsg.classList.remove('show');
+      infoMsg.classList.remove('show');
+      phoneInput.value = '';
+      consentCheck.checked = false;
+      updateBtn();
+    }
+
+    // 📝 VALIDATION DU FORMULAIRE
+    function updateBtn() {
+      const phone = phoneInput.value.replace(/\D/g, '');
+      pairBtn.disabled = !(phone.length >= 9 && consentCheck.checked);
+    }
+    phoneInput.addEventListener('input', updateBtn);
+    consentCheck.addEventListener('change', updateBtn);
+
+    // 🚀 GÉNÉRATION DU CODE
+    pairBtn.addEventListener('click', async () => {
+      const phone = phoneInput.value.replace(/\D/g, '');
+      if (!selectedServerId) return showError('Veuillez sélectionner un serveur.');
+
+      pairBtn.disabled = true;
+      pairBtn.textContent = '⏳ Génération en cours...';
+      errorMsg.classList.remove('show');
+      resultBox.classList.remove('show');
+
+      try {
+        const res = await fetch(`${API_URL}/api/pair`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'omit',
+          body: JSON.stringify({ phone, consent: true, serverId: selectedServerId })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+
+        currentPhone = phone;
+        currentCode = data.code;
+        currentToken = data.token || null;
+        
+        codeDisplay.textContent = data.code;
+        resultBox.classList.add('show');
+        pairBtn.textContent = '✅ Code généré';
+        pairBtn.disabled = false;
+        
+        showInfo(`Code généré sur le serveur ${selectedServerId}. Entrez-le dans WhatsApp.`);
+        
+        setTimeout(loadServers, 2000);
+        pollStatus();
+
+      } catch (e) {
+        showError(e.message);
+        pairBtn.textContent = '🔗 Générer le code de couplage';
+        pairBtn.disabled = false;
+      }
+    });
+
+    // 🔄 VÉRIFIER LE STATUT
+    async function checkStatus() {
+      if (!currentPhone) return;
+      try {
+        const res = await fetch(`${API_URL}/api/status/${encodeURIComponent(currentPhone)}`, { headers: authHeaders(), credentials: 'omit' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+        
+        if (data.status === 'connected') showInfo('✅ Votre bot est connecté et actif !');
+        else if (data.status === 'pending') showInfo('⏳ En attente de couplage. Entrez le code dans WhatsApp.');
+        else if (data.status === 'disconnected') showInfo('⚠️ Bot déconnecté. Générez un nouveau code.');
+      } catch (e) { showError(e.message); }
+    }
+
+    // 🚪 DÉCONNEXION
+    async function disconnect() {
+      if (!currentPhone) return;
+      if (!confirm('Voulez-vous vraiment déconnecter votre bot ?')) return;
+      try {
+        const res = await fetch(`${API_URL}/api/disconnect/${encodeURIComponent(currentPhone)}`, { method: 'POST', headers: authHeaders(), credentials: 'omit' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+        showInfo('✅ Bot déconnecté.');
+        resultBox.classList.remove('show');
+        currentPhone = null; currentCode = null; currentToken = null;
+        loadServers();
+      } catch (e) { showError(e.message); }
+    }
+
+    // ⏳ POLLING AUTOMATIQUE DU STATUT
+    async function pollStatus() {
+      if (!currentPhone) return;
+      try {
+        const res = await fetch(`${API_URL}/api/status/${encodeURIComponent(currentPhone)}`, { headers: authHeaders(), credentials: 'omit' });
+        const data = await res.json();
+        if (data.status === 'connected') { 
+          showInfo('✅ Votre bot est connecté et actif !'); 
+          loadServers();
+          return; 
+        }
+      } catch (e) {}
+      setTimeout(pollStatus, 10000);
+    }
+
+    // Utilitaires d'affichage
+    function showError(msg) { errorMsg.textContent = '❌ ' + msg; errorMsg.classList.add('show'); infoMsg.classList.remove('show'); }
+    function showInfo(msg) { infoMsg.textContent = 'ℹ️ ' + msg; infoMsg.classList.add('show'); errorMsg.classList.remove('show'); }
+
+    // ==================== DÉMARRAGE ====================
+    // 1. Chargement initial
+    loadServers();
+    
+    // 2. Rafraîchissement automatique toutes les 5 secondes (Temps Réel)
+    setInterval(loadServers, 5000);
+
+  </script>
+</body>
+</html>
