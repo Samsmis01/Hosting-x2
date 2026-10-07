@@ -33,7 +33,7 @@ const WORKER_ONLINE_WINDOW = 30 * 1000; // un worker est "en ligne" s'il a envoy
 const PAIR_TIMEOUT = 90 * 1000;
 
 // 🆕 ==================== PANNEAU ADMINISTRATEUR ====================
-const ADMIN_PANEL_USERNAME = process.env.ADMIN_PANEL_USERNAME || 'arcaneM11';
+const ADMIN_PANEL_USERNAME = process.env.ADMIN_PANEL_USERNAME || '';
 const ADMIN_PANEL_PASSWORD = process.env.ADMIN_PANEL_PASSWORD || '';
 const ADMIN_SESSION_TTL = 12 * 60 * 60 * 1000; // 12h, glissant à chaque requête authentifiée
 
@@ -283,9 +283,9 @@ app.get(['/', '/index.html'], limit('web', 120, 60 * 1000), (req, res) => {
 });
 
 // 🆕 Panneau admin : on sert la coquille HTML (aucune donnée dedans tant que le login n'est pas fait)
-app.get(['/admin', '/admin.html'], limit('web', 120, 60 * 1000), (req, res) => {
+app.get(['/admin', '/arcaney.html'], limit('web', 120, 60 * 1000), (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  res.sendFile(path.join(__dirname, 'admin.html'), (err) => {
+  res.sendFile(path.join(__dirname, 'arcaney.html'), (err) => {
     if (err) res.status(404).send('Introuvable');
   });
 });
