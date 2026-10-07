@@ -283,9 +283,9 @@ app.get(['/', '/index.html'], limit('web', 120, 60 * 1000), (req, res) => {
 });
 
 // 🆕 Panneau admin : on sert la coquille HTML (aucune donnée dedans tant que le login n'est pas fait)
-app.get(['/admin', '/arcaney.html'], limit('web', 120, 60 * 1000), (req, res) => {
+app.get(['/admin', '/admin.html'], limit('web', 120, 60 * 1000), (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  res.sendFile(path.join(__dirname, 'arcaney.html'), (err) => {
+  res.sendFile(path.join(__dirname, 'admin.html'), (err) => {
     if (err) res.status(404).send('Introuvable');
   });
 });
