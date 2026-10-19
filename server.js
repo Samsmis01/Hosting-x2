@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3000;
 
 // ==================== CONFIGURATION ====================
 const SERVER_IDS = [1, 2, 3, 4];
-const MAX_USERS_PER_SERVER = parseInt(process.env.MAX_USERS_PER_SERVER || '10', 10);
+const MAX_USERS_PER_SERVER = parseInt(process.env.MAX_USERS_PER_SERVER || '24', 10);
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const ADMIN_KEY = process.env.ADMIN_KEY || '';
