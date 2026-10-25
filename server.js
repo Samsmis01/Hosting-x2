@@ -49,7 +49,7 @@ const ADMIN_SESSION_TTL = 12 * 60 * 60 * 1000; // 12h, glissant à chaque requê
 // Modèle gratuit par défaut (suffixe ":free") — change OPENROUTER_MODEL si besoin.
 // Clé à définir dans les variables d'environnement Render : OPENROUTER_API_KEY = sk-or-...
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.1-8b-instruct:free';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openrouter/free';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 if (!OPENROUTER_API_KEY) {
   console.warn('⚠️ OPENROUTER_API_KEY absente : le chatbot /api/chat est désactivé jusqu\'à ce qu\'elle soit définie.');
