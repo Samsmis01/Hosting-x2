@@ -1,4 +1,4 @@
-// petit, trouve toi du taff mon frère au lieu de copier 
+// petit, trouve toi du taff mon frère au lieu de copier
 
 const express = require('express');
 const fs = require('fs');
@@ -43,6 +43,16 @@ const PAIR_TIMEOUT = 90 * 1000;
 const ADMIN_PANEL_USERNAME = process.env.ADMIN_PANEL_USERNAME || '';
 const ADMIN_PANEL_PASSWORD = process.env.ADMIN_PANEL_PASSWORD || '';
 const ADMIN_SESSION_TTL = 12 * 60 * 60 * 1000; // 12h, glissant à chaque requête authentifiée
+
+// 🆕 ==================== ASSISTANT IA (CHATBOT HEXTECH) ====================
+// Modèle open source servi gratuitement par Hugging Face Inference API.
+// Clé à définir dans les variables d'environnement Render : HF_API_KEY = hf_...
+const HF_API_KEY = process.env.HF_API_KEY || '';
+const HF_MODEL = 'mistralai/Mistral-7B-Instruct-v0.3';
+const HF_API_URL = `https://api-inference.huggingface.co/models/${HF_MODEL}`;
+if (!HF_API_KEY) {
+  console.warn('⚠️ HF_API_KEY absente : le chatbot /api/chat est désactivé jusqu\'à ce qu\'elle soit définie.');
+}
 
 if (ADMIN_KEY.length < 24) {
   console.error('❌ ADMIN_KEY manquante ou trop courte (min 24 caractères). Définis-la dans les variables d\'environnement.');
@@ -360,6 +370,42 @@ function userTokenValid(req, user) {
 
 const PHONE_RE = /^\d{9,15}$/;
 
+// 🆕 ==================== ASSISTANT IA : PROMPT SYSTÈME ====================
+const HEXTECH_SYSTEM_PROMPT = `Tu es l'assistant virtuel officiel de HEXTECH, un bot WhatsApp multi-fonctions (608 commandes) qui automatise, sécurise et modère les conversations WhatsApp (particuliers, groupes, entreprises).
+
+Informations à connaître et à partager si on te les demande :
+- HEXTECH se couple à un numéro WhatsApp via un code à usage unique généré depuis ce site (Paramètres WhatsApp → Appareils liés → Lier un appareil → Lier avec un numéro, puis entrer le code affiché sur le site).
+- Avant de coupler, l'utilisateur doit choisir un serveur disponible (non complet, en ligne) sur le dashboard.
+- Fonctionnalités principales : modération de groupe (anti-spam, anti-lien, anti-bot), accueil/au revoir automatiques, téléchargement de médias (TikTok, Instagram, etc.), quiz interactifs, système de parrainage à points, statistiques et monitoring en temps réel (CPU/RAM/utilisateurs), et de nombreuses autres commandes.
+- HEXTECH a été créé par Samuel, un jeune développeur congolais de 20 ans, étudiant à la Faculté des Sciences et Technologies de l'Université de Kinshasa (UNIKIN).
+- Canal officiel Telegram : t.me/hextechcar. Une chaîne WhatsApp officielle est aussi accessible depuis le bas de la page.
+- Le site permet de surveiller l'état des serveurs (en ligne/complet/hors ligne) et de se déconnecter à tout moment.
+
+Consignes de réponse :
+- Réponds toujours en français, de façon chaleureuse, claire et concise (quelques phrases ; évite les pavés de texte).
+- Aide l'utilisateur à comprendre comment utiliser le bot et le site (couplage, choix du serveur, commandes disponibles, etc.).
+- Si une question sort du sujet HEXTECH, réponds brièvement puis recentre poliment la conversation sur HEXTECH.
+- Ne révèle jamais de clé API, de token, ni de détails techniques sensibles sur l'infrastructure ou le code.
+- Ne fournis aucune aide pour des activités malveillantes (piratage, spam, contournement de sécurité, etc.) — oriente poliment la personne vers une utilisation légitime du bot.`;
+
+// Construit un prompt au format attendu par Mistral-Instruct à partir de l'historique envoyé
+// par le site (Hugging Face Inference API n'offre pas d'endpoint "chat" standardisé selon
+// le modèle : on formate donc le prompt nous-mêmes, ce qui marche avec tous les modèles).
+function buildMistralPrompt(systemPrompt, messages) {
+  let prompt = '';
+  let firstUserTurn = true;
+  for (const m of messages) {
+    if (m.role === 'user') {
+      const content = firstUserTurn ? `${systemPrompt}\n\nQuestion de l'utilisateur : ${m.content}` : m.content;
+      prompt += `<s>[INST] ${content} [/INST]`;
+      firstUserTurn = false;
+    } else if (m.role === 'assistant') {
+      prompt += ` ${m.content}</s>`;
+    }
+  }
+  return prompt;
+}
+
 // ==================== ROUTES PUBLIQUES ====================
 
 // Site web : on sert UNIQUEMENT index.html (plus tout le dossier du projet)
@@ -522,6 +568,62 @@ app.post('/api/disconnect/:phone', limit('disconnect', 10, 60 * 1000), (req, res
 
   console.log(`🚪 Déconnexion demandée pour ${maskPhone(phone)}`);
   res.json({ success: true, message: 'Déconnexion en cours...' });
+});
+
+// 🆕 ==================== ASSISTANT IA : ROUTE /api/chat ====================
+// Le robot du dashboard envoie ici l'historique de la conversation ; on relaie vers
+// Hugging Face Inference API (modèle open source, gratuit) et on renvoie la réponse.
+app.post('/api/chat', limit('chat', 12, 60 * 1000), async (req, res) => {
+  try {
+    if (!HF_API_KEY) {
+      return res.status(503).json({ error: 'Service IA non configuré (HF_API_KEY manquante sur le serveur).' });
+    }
+
+    const rawMessages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+    const safeMessages = rawMessages
+      .slice(-10)
+      .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+      .map(m => ({ role: m.role, content: m.content.slice(0, 1000) }));
+
+    if (!safeMessages.length) {
+      return res.status(400).json({ error: 'Message vide.' });
+    }
+
+    const prompt = buildMistralPrompt(HEXTECH_SYSTEM_PROMPT, safeMessages);
+
+    const hfRes = await fetch(HF_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${HF_API_KEY}`
+      },
+      body: JSON.stringify({
+        inputs: prompt,
+        parameters: { max_new_tokens: 350, temperature: 0.6, return_full_text: false },
+        // Attend que le modèle se "réveille" au lieu de renvoyer une erreur immédiate
+        // (les modèles gratuits se mettent en veille après inactivité)
+        options: { wait_for_model: true }
+      })
+    });
+
+    const data = await hfRes.json();
+
+    if (!hfRes.ok) {
+      console.error('❌ Erreur Hugging Face:', data);
+      const msg = data?.error && /loading/i.test(data.error)
+        ? 'Le modèle IA démarre, réessaie dans quelques secondes...'
+        : "Le service IA n'a pas répondu correctement.";
+      return res.status(502).json({ error: msg });
+    }
+
+    const reply = (Array.isArray(data) ? data[0]?.generated_text : data?.generated_text)?.trim()
+      || "Désolé, je n'ai pas de réponse pour le moment.";
+
+    res.json({ reply });
+  } catch (e) {
+    console.error('❌ Erreur /api/chat:', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
 });
 
 // 🆕 ==================== ROUTES ADMIN (protégées par login) ====================
@@ -810,6 +912,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Serveur de couplage sur le port ${PORT}`);
   console.log(`🖥️ Serveurs : ${SERVER_IDS.length} (max ${MAX_USERS_PER_SERVER} utilisateurs chacun)`);
   console.log(`🔒 Données chiffrées : ${ENCRYPTION_KEY ? 'oui' : 'non (ENCRYPTION_KEY absente)'}`);
+  console.log(`🤖 Chatbot IA : ${HF_API_KEY ? 'activé' : 'désactivé (HF_API_KEY absente)'}`);
   console.log('════════════════════════════════════════');
 });
 
