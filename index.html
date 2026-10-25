@@ -10,7 +10,7 @@
   <style>
     /* ⚡ RESET & BASE */
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-    
+
     body {
       background-color: #080a10;
       color: #e2e8f0;
@@ -459,10 +459,10 @@
       display: flex; flex-direction: column; gap: 15px; animation: slideUp 0.5s ease;
     }
     @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    
+
     .form-panel h2 { font-size: 1.1rem; color: #00c8ff; margin-bottom: 5px; }
     .form-panel p { font-size: 0.8rem; color: #64748b; }
-    
+
     input[type="tel"] {
       width: 100%; padding: 14px; background: #080a10; border: 1px solid #1e2532;
       border-radius: 8px; color: #e2e8f0; font-size: 0.95rem; font-family: monospace;
@@ -483,7 +483,7 @@
     .result-box { display: none; padding: 20px; background: rgba(0, 200, 255, 0.05); border: 1px solid #00c8ff; border-radius: 8px; margin-top: 10px; text-align: center; }
     .result-box.show { display: block; }
     .code-display { font-size: 2.5rem; font-weight: bold; color: #00e5ff; letter-spacing: 8px; margin: 15px 0; font-family: monospace; }
-    
+
     .error-msg { display: none; color: #ff006e; font-size: 0.85rem; padding: 10px; background: rgba(255, 0, 110, 0.1); border-radius: 6px; border: 1px solid #ff006e; }
     .error-msg.show { display: block; }
     .info-msg { display: none; color: #00c8ff; font-size: 0.85rem; padding: 10px; background: rgba(0, 200, 255, 0.1); border-radius: 6px; border: 1px solid #00c8ff; }
@@ -577,6 +577,142 @@
       .stats-container { width: 100%; justify-content: space-between; }
       .stat-card { flex: 1; }
     }
+
+    /* 🤖 ==================== BOUTON ROBOT IA (YEUX CLIGNOTANTS) ==================== */
+    #aiRobotBtn {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 62px;
+      height: 62px;
+      z-index: 999;
+      cursor: pointer;
+      background: linear-gradient(135deg, #0f131a 0%, #1a2130 100%);
+      border: 2px solid #00c8ff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 25px rgba(0, 200, 255, 0.35), 0 8px 20px rgba(0, 0, 0, 0.45);
+      animation: robotFloat 3s ease-in-out infinite;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    #aiRobotBtn:hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 35px rgba(0, 200, 255, 0.55), 0 8px 20px rgba(0, 0, 0, 0.45);
+    }
+    @keyframes robotFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+    .robot-face { width: 34px; height: 26px; position: relative; }
+    .robot-antenna {
+      position: absolute; top: -11px; left: 50%; width: 2px; height: 10px;
+      background: #00c8ff; transform: translateX(-50%);
+    }
+    .robot-antenna::before {
+      content: ''; position: absolute; top: -6px; left: 50%; width: 6px; height: 6px;
+      border-radius: 50%; background: #00e5ff; box-shadow: 0 0 8px #00c8ff; transform: translateX(-50%);
+    }
+    .robot-eye {
+      position: absolute; top: 6px; width: 9px; height: 9px; border-radius: 50%;
+      background: #00e5ff; box-shadow: 0 0 8px #00c8ff;
+      animation: robotBlink 4.5s ease-in-out infinite;
+    }
+    .robot-eye.left { left: 2px; }
+    .robot-eye.right { right: 2px; animation-delay: 0.05s; }
+    @keyframes robotBlink {
+      0%, 90%, 100% { transform: scaleY(1); }
+      95% { transform: scaleY(0.1); }
+    }
+    .robot-mouth {
+      position: absolute; bottom: 0; left: 50%; width: 14px; height: 4px;
+      border-radius: 0 0 8px 8px; background: #1e6fff; transform: translateX(-50%);
+    }
+    .robot-badge {
+      position: absolute; top: -2px; right: -2px; width: 14px; height: 14px;
+      border-radius: 50%; background: #00ff80; border: 2px solid #080a10;
+      animation: badgePulse 2s ease infinite;
+    }
+    @keyframes badgePulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(0, 255, 128, 0.5); }
+      50% { box-shadow: 0 0 0 4px rgba(0, 255, 128, 0); }
+    }
+
+    /* 🤖 ==================== PANNEAU DE CHAT ==================== */
+    #aiChatPanel {
+      position: fixed;
+      bottom: 98px;
+      right: 24px;
+      width: 340px;
+      max-width: calc(100vw - 32px);
+      height: 460px;
+      max-height: calc(100vh - 140px);
+      background: #0f131a;
+      border: 1px solid #1e2532;
+      border-radius: 16px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 200, 255, 0.1);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 998;
+    }
+    #aiChatPanel.active {
+      display: flex;
+      animation: chatIn 0.25s ease;
+    }
+    @keyframes chatIn {
+      from { opacity: 0; transform: translateY(16px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .chat-header {
+      background: linear-gradient(135deg, rgba(0, 200, 255, 0.12), rgba(123, 47, 247, 0.12));
+      padding: 14px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid #1e2532; flex-shrink: 0;
+    }
+    .chat-header-title { font-size: 0.9rem; font-weight: 700; color: #fff; }
+    .chat-header-status { font-size: 0.7rem; color: #00ff80; display: flex; align-items: center; gap: 5px; margin-top: 2px; }
+    .chat-header-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #00ff80; }
+    .chat-close-btn {
+      background: none; border: none; color: #94a3b8; font-size: 1.1rem; cursor: pointer;
+      line-height: 1; padding: 4px 6px; border-radius: 6px; transition: all 0.2s ease;
+    }
+    .chat-close-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+
+    .chat-messages {
+      flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px;
+      scroll-behavior: smooth;
+    }
+    .chat-messages::-webkit-scrollbar { width: 5px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: #1e2532; border-radius: 5px; }
+
+    .chat-msg {
+      max-width: 85%; padding: 9px 12px; border-radius: 12px; font-size: 0.82rem;
+      line-height: 1.5; word-wrap: break-word; white-space: pre-wrap;
+    }
+    .chat-msg.bot { align-self: flex-start; background: #1a2130; color: #e2e8f0; border-bottom-left-radius: 3px; }
+    .chat-msg.user { align-self: flex-end; background: linear-gradient(135deg, #00c8ff, #4a90ff); color: #07131f; font-weight: 500; border-bottom-right-radius: 3px; }
+    .chat-msg.typing { align-self: flex-start; background: #1a2130; color: #64748b; font-style: italic; }
+
+    .chat-input-row { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #1e2532; flex-shrink: 0; }
+    #chatInput {
+      flex: 1; background: #080a10; border: 1px solid #1e2532; border-radius: 20px;
+      padding: 10px 14px; color: #e2e8f0; font-size: 0.82rem; outline: none;
+    }
+    #chatInput:focus { border-color: #00c8ff; box-shadow: 0 0 0 2px rgba(0, 200, 255, 0.1); }
+    #chatSendBtn {
+      background: linear-gradient(135deg, #00c8ff, #7b2ff7); border: none; width: 38px; height: 38px;
+      border-radius: 50%; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: 1rem; transition: all 0.2s ease;
+    }
+    #chatSendBtn:hover:not(:disabled) { box-shadow: 0 0 15px rgba(0, 200, 255, 0.5); transform: scale(1.05); }
+    #chatSendBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    @media (max-width: 420px) {
+      #aiChatPanel { right: 12px; left: 12px; width: auto; bottom: 88px; height: 56vh; }
+      #aiRobotBtn { right: 16px; bottom: 16px; }
+    }
   </style>
 </head>
 <body>
@@ -594,7 +730,7 @@
     </div>
 
     <div class="dashboard">
-      
+
       <!-- HEADER -->
       <header class="header">
         <div class="top-left-bar">
@@ -661,16 +797,16 @@
       <section class="form-panel" id="formPanel" style="display: none;">
         <h2>🔗 Couplage sur le <span id="selectedServerName">Serveur 1</span></h2>
         <p>Entrez votre numéro WhatsApp pour recevoir le code de couplage.</p>
-        
+
         <input type="tel" id="phone" placeholder="243XXXXXXXXX" maxlength="15" pattern="[0-9]+">
-        
+
         <div class="checkbox-group">
           <input type="checkbox" id="consent">
           <label for="consent">Je consens à coupler mon numéro. je peux me déconnecter à tout moment.</label>
         </div>
 
         <button class="btn-submit" id="pairBtn" disabled>Générer le code de couplage</button>
-        
+
         <div class="error-msg" id="errorMsg"></div>
         <div class="info-msg" id="infoMsg"></div>
 
@@ -807,10 +943,36 @@
     </div>
   </div>
 
+  <!-- 🤖 ==================== BOUTON ROBOT IA + PANNEAU DE CHAT ==================== -->
+  <div id="aiRobotBtn" title="Discuter avec l'assistant HEXTECH" role="button" tabindex="0" aria-label="Ouvrir l'assistant HEXTECH">
+    <div class="robot-face">
+      <div class="robot-antenna"></div>
+      <div class="robot-eye left"></div>
+      <div class="robot-eye right"></div>
+      <div class="robot-mouth"></div>
+    </div>
+    <span class="robot-badge"></span>
+  </div>
+
+  <div id="aiChatPanel">
+    <div class="chat-header">
+      <div>
+        <div class="chat-header-title">Assistant HEXTECH</div>
+        <div class="chat-header-status">En ligne</div>
+      </div>
+      <button class="chat-close-btn" id="chatCloseBtn" type="button" aria-label="Fermer le chat">✕</button>
+    </div>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input-row">
+      <input type="text" id="chatInput" placeholder="Posez votre question..." autocomplete="off" maxlength="500">
+      <button id="chatSendBtn" type="button" aria-label="Envoyer">➤</button>
+    </div>
+  </div>
+
   <script>
     // ⚠️ Si le site et le serveur sont sur le même domaine, laisse vide.
     // Sinon, mets l'URL de ton serveur Render (ex: '')
-    const API_URL = 'https://last-judment.onrender.com'; 
+    const API_URL = 'https://last-judment.onrender.com';
 
     // 🔢 VALEUR SIMULÉE pour le compteur "Utilisateurs liés" (en haut).
     // Les cartes des serveurs gardent les vrais chiffres (ex: 9).
@@ -908,7 +1070,7 @@
         ctxBg.save();
         ctxBg.strokeStyle = 'rgba(0, 120, 255, 0.08)';
         ctxBg.lineWidth = 1;
-        
+
         const gridSize = 60;
         // Lignes verticales
         for (let x = 0; x < width; x += gridSize) {
@@ -930,36 +1092,36 @@
       function drawParticles() {
         for (let i = 0; i < particles.length; i++) {
           const p = particles[i];
-          
+
           // Déplacement
           p.x += p.vx;
           p.y += p.vy;
-          
+
           // Rebond sur les bords
           if (p.x < 0 || p.x > width) p.vx *= -1;
           if (p.y < 0 || p.y > height) p.vy *= -1;
-          
+
           // Dessiner la particule avec halo
           ctxBg.beginPath();
           ctxBg.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
           ctxBg.fillStyle = p.color;
           ctxBg.globalAlpha = p.alpha;
           ctxBg.fill();
-          
+
           // Halo lumineux
           ctxBg.beginPath();
           ctxBg.arc(p.x, p.y, p.radius * 3, 0, Math.PI * 2);
           ctxBg.fillStyle = p.color;
           ctxBg.globalAlpha = p.alpha * 0.15;
           ctxBg.fill();
-          
+
           // Connexions entre particules proches
           for (let j = i + 1; j < particles.length; j++) {
             const p2 = particles[j];
             const dx = p.x - p2.x;
             const dy = p.y - p2.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            
+
             if (dist < MAX_DISTANCE) {
               const opacity = (1 - dist / MAX_DISTANCE) * 0.35;
               ctxBg.beginPath();
@@ -977,12 +1139,12 @@
 
       function animate() {
         ctxBg.clearRect(0, 0, width, height);
-        
+
         drawGrid();
         drawParticles();
-        
+
         gridOffset += 0.3;
-        
+
         requestAnimationFrame(animate);
       }
 
@@ -999,7 +1161,7 @@
 
     // 📊 INITIALISATION DU GRAPHIQUE CHART.JS
     const ctx = document.getElementById('realtimeChart').getContext('2d');
-    
+
     // Création des dégradés pour les courbes
     const gradientCpu = ctx.createLinearGradient(0, 0, 0, 180);
     gradientCpu.addColorStop(0, 'rgba(0, 255, 128, 0.4)');
@@ -1074,13 +1236,13 @@
       // Ajoute la nouvelle valeur et retire la plus ancienne
       realtimeChart.data.datasets[0].data.push(cpu);
       realtimeChart.data.datasets[0].data.shift();
-      
+
       realtimeChart.data.datasets[1].data.push(ram);
       realtimeChart.data.datasets[1].data.shift();
-      
+
       realtimeChart.data.datasets[2].data.push(disk);
       realtimeChart.data.datasets[2].data.shift();
-      
+
       realtimeChart.update();
     }
 
@@ -1089,10 +1251,10 @@
       try {
         const res = await fetch(`${API_URL}/api/servers`, { credentials: 'omit' });
         if (!res.ok) throw new Error('Erreur réseau');
-        
+
         const data = await res.json();
         currentServers = data.servers;
-        
+
         renderServers(currentServers);
       } catch (e) {
         console.error("Erreur chargement serveurs:", e);
@@ -1107,7 +1269,7 @@
     function renderServers(servers) {
       serversGrid.innerHTML = '';
       let activeCount = 0;
-      
+
       let totalCpu = 0, totalRam = 0, totalDisk = 0;
       let onlineServers = 0;
 
@@ -1118,7 +1280,7 @@
           totalCpu += srv.cpu || 0;
           totalRam += srv.ram || 0;
           // On n'a pas le disque dans l'API, on met une valeur fictive basée sur le RAM pour l'exemple
-          totalDisk += (srv.ram || 0) * 0.8; 
+          totalDisk += (srv.ram || 0) * 0.8;
         }
 
         const isFull = srv.current >= srv.max;
@@ -1134,7 +1296,7 @@
 
         // ✅ Les cartes serveurs utilisent les VRAIS chiffres (srv.current / srv.max)
         const usagePercent = (srv.current / srv.max) * 100;
-        
+
         const icons = ['♻️', '🌐', '♻️', '🌐'];
         const iconClasses = ['icon-web', 'icon-db', 'icon-game', 'icon-app'];
         const icon = icons[srv.id - 1] || '🖥️';
@@ -1150,7 +1312,7 @@
             </div>
             <div class="status-badge ${badgeClass}">${badgeText}</div>
           </div>
-          
+
           <div class="card-body">
             <div>
               <div class="metric-row"><span>Utilisateurs</span><span>${Number(srv.current) || 0}/${Number(srv.max) || 0}</span></div>
@@ -1183,7 +1345,7 @@
       // 🔢 Compteur du haut : valeur SIMULÉE (53)
       document.getElementById('totalUsers').textContent = SIMULATED_USERS;
       document.getElementById('activeServers').textContent = activeCount;
-      
+
       // Mettre à jour le graphique avec les moyennes
       if (onlineServers > 0) {
         updateChart(totalCpu / onlineServers, totalRam / onlineServers, totalDisk / onlineServers);
@@ -1197,9 +1359,9 @@
     // 📋 ACTIVITÉ RÉELLE (Basée sur les utilisateurs connectés)
     function renderActivity() {
       activityList.innerHTML = '';
-      
+
       let hasActivity = false;
-      
+
       currentServers.forEach(srv => {
         if (srv.current > 0) {
           hasActivity = true;
@@ -1228,10 +1390,10 @@
     function selectServer(id, name) {
       selectedServerId = id;
       selectedServerName.textContent = name;
-      
+
       formPanel.style.display = 'flex';
       formPanel.scrollIntoView({ behavior: 'smooth' });
-      
+
       document.querySelectorAll('.btn-select').forEach(btn => btn.classList.remove('selected'));
       const buttons = document.querySelectorAll('.btn-select');
       if (buttons[id - 1]) buttons[id - 1].classList.add('selected');
@@ -1276,14 +1438,14 @@
         currentPhone = phone;
         currentCode = data.code;
         currentToken = data.token || null;
-        
+
         codeDisplay.textContent = data.code;
         resultBox.classList.add('show');
         pairBtn.textContent = '✅ Code généré';
         pairBtn.disabled = false;
-        
+
         showInfo(`Code généré sur le serveur ${selectedServerId}. Entrez-le dans WhatsApp.`);
-        
+
         setTimeout(loadServers, 2000);
         pollStatus();
 
@@ -1301,7 +1463,7 @@
         const res = await fetch(`${API_URL}/api/status/${encodeURIComponent(currentPhone)}`, { headers: authHeaders(), credentials: 'omit' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur');
-        
+
         if (data.status === 'connected') showInfo('✅ Votre bot est connecté et actif !');
         else if (data.status === 'pending') showInfo('⏳ En attente de couplage. Entrez le code dans WhatsApp.');
         else if (data.status === 'disconnected') showInfo('⚠️ Bot déconnecté. Générez un nouveau code.');
@@ -1329,10 +1491,10 @@
       try {
         const res = await fetch(`${API_URL}/api/status/${encodeURIComponent(currentPhone)}`, { headers: authHeaders(), credentials: 'omit' });
         const data = await res.json();
-        if (data.status === 'connected') { 
-          showInfo('✅ Votre bot est connecté et actif !'); 
+        if (data.status === 'connected') {
+          showInfo('✅ Votre bot est connecté et actif !');
           loadServers();
-          return; 
+          return;
         }
       } catch (e) {}
       setTimeout(pollStatus, 10000);
@@ -1342,10 +1504,99 @@
     function showError(msg) { errorMsg.textContent = '❌ ' + msg; errorMsg.classList.add('show'); infoMsg.classList.remove('show'); }
     function showInfo(msg) { infoMsg.textContent = 'ℹ️ ' + msg; infoMsg.classList.add('show'); errorMsg.classList.remove('show'); }
 
+    // 🤖 ==================== ASSISTANT IA (ROBOT + CHAT) ====================
+    (function initAiChat() {
+      const robotBtn = document.getElementById('aiRobotBtn');
+      const chatPanel = document.getElementById('aiChatPanel');
+      const chatMessages = document.getElementById('chatMessages');
+      const chatInput = document.getElementById('chatInput');
+      const chatSendBtn = document.getElementById('chatSendBtn');
+      const chatCloseBtn = document.getElementById('chatCloseBtn');
+
+      const GREETING = "👋 Salut ! Je suis l'assistant virtuel de HEXTECH.\n\nJe peux t'expliquer à quoi sert ce bot WhatsApp, comment le coupler, et répondre à tes questions sur HEXTECH et son créateur. Que veux-tu savoir ?";
+      const HISTORY_LIMIT = 10;
+
+      let history = [];
+      let greeted = false;
+      let sending = false;
+
+      function addMessage(role, text) {
+        const div = document.createElement('div');
+        div.className = `chat-msg ${role}`;
+        div.textContent = text;
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return div;
+      }
+
+      function openChat() {
+        chatPanel.classList.add('active');
+        if (!greeted) {
+          greeted = true;
+          addMessage('bot', GREETING);
+        }
+        chatInput.focus();
+      }
+      function closeChat() {
+        chatPanel.classList.remove('active');
+      }
+      function toggleChat() {
+        if (chatPanel.classList.contains('active')) closeChat(); else openChat();
+      }
+
+      robotBtn.addEventListener('click', toggleChat);
+      robotBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleChat(); }
+      });
+      chatCloseBtn.addEventListener('click', closeChat);
+
+      async function sendMessage() {
+        const text = chatInput.value.trim();
+        if (!text || sending) return;
+
+        sending = true;
+        chatSendBtn.disabled = true;
+        addMessage('user', text);
+        history.push({ role: 'user', content: text });
+        chatInput.value = '';
+
+        const typingEl = addMessage('bot typing', 'HEXTECH écrit...');
+
+        try {
+          const res = await fetch(`${API_URL}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'omit',
+            body: JSON.stringify({ messages: history.slice(-HISTORY_LIMIT) })
+          });
+
+          const data = await res.json();
+          typingEl.remove();
+          if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+
+          const reply = data.reply || "Désolé, je n'ai pas compris, peux-tu reformuler ?";
+          addMessage('bot', reply);
+          history.push({ role: 'assistant', content: reply });
+        } catch (e) {
+          typingEl.remove();
+          addMessage('bot', "⚠️ Le service de chat est momentanément indisponible. Réessaie dans quelques instants, ou contacte-nous via Telegram / WhatsApp en bas de page.");
+        } finally {
+          sending = false;
+          chatSendBtn.disabled = false;
+        }
+      }
+
+      chatSendBtn.addEventListener('click', sendMessage);
+      chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }
+      });
+    })();
+    // 🤖 ==================== FIN ASSISTANT IA ====================
+
     // ==================== DÉMARRAGE ====================
     // 1. Chargement initial
     loadServers();
-    
+
     // 2. Rafraîchissement automatique toutes les 5 secondes (Temps Réel)
     setInterval(loadServers, 5000);
 
