@@ -128,7 +128,12 @@ function adminAuth(req, res, next) {
 
 // ==================== MIDDLEWARES ====================
 app.disable('x-powered-by');
-app.set('trust proxy', 1); // Render est derrière un proxy
+// 🆕 FIX : "1" ne faisait confiance qu'à un seul saut de proxy, mais l'infra interne de
+// Render en traverse plusieurs → req.ip capturait une IP privée (10.x.x.x) au lieu de la
+// vraie IP du visiteur. "true" fait confiance à toute la chaîne X-Forwarded-For et prend
+// la toute première adresse (celle du vrai client), ce qui est le réglage recommandé pour
+// les plateformes comme Render où l'app n'est jamais exposée directement.
+app.set('trust proxy', true);
 
 // En-têtes de sécurité
 app.use((req, res, next) => {
