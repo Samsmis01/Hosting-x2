@@ -253,6 +253,24 @@
       <div class="chart-bars" id="visitsChart"></div>
     </div>
 
+    <div id="geoWarning" style="display:none; margin-top:14px; padding:10px 14px; border-radius:8px; background:rgba(255,149,0,0.1); border:1px solid rgba(255,149,0,0.3); color:#ff9500; font-size:0.78rem;">
+      ⚠️ Pays non disponible : le paquet <code>geoip-lite</code> n'est pas installé côté serveur.
+    </div>
+
+    <div class="table-wrap" style="margin-top:14px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Adresse IP</th>
+            <th>Pays</th>
+            <th>Date / Heure</th>
+          </tr>
+        </thead>
+        <tbody id="recentVisitsBody"></tbody>
+      </table>
+      <div class="empty-state" id="recentVisitsEmpty" style="display:none;">Aucune visite récente.</div>
+    </div>
+
     <div class="section-title">Serveurs <span class="count" id="serversCount">0</span></div>
     <div class="servers-grid" id="serversGrid"></div>
 
@@ -502,6 +520,26 @@
     document.getElementById('visitsTotal').textContent = fmtNumber(data.total);
     document.getElementById('visitsToday').textContent = fmtNumber(data.today && data.today.visits);
     document.getElementById('visitsTodayUnique').textContent = fmtNumber(data.today && data.today.uniqueIPs);
+
+    document.getElementById('geoWarning').style.display = data.geoAvailable ? 'none' : 'block';
+
+    // 🆕 Tableau des visites récentes (IP + pays)
+    const recent = data.recent || [];
+    const recentBody = document.getElementById('recentVisitsBody');
+    const recentEmpty = document.getElementById('recentVisitsEmpty');
+    if (recent.length === 0) {
+      recentBody.innerHTML = '';
+      recentEmpty.style.display = 'block';
+    } else {
+      recentEmpty.style.display = 'none';
+      recentBody.innerHTML = recent.map(v => `
+        <tr>
+          <td class="mono">${escapeHtml(v.ip || '—')}</td>
+          <td>${escapeHtml(v.flag || '🏳️')} ${escapeHtml(v.countryName || 'Inconnu')}</td>
+          <td>${fmtDate(v.date)}</td>
+        </tr>
+      `).join('');
+    }
 
     const days = data.last14days || [];
     const max = Math.max(1, ...days.map(d => d.visits || 0));
