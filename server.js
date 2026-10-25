@@ -5,6 +5,25 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+// 🆕 Géolocalisation des visiteurs (recherche locale, pas d'appel réseau par requête).
+// Si le paquet n'est pas encore installé, on continue sans planter : il faut juste
+// ajouter "geoip-lite" aux dépendances (package.json) puis redéployer.
+let geoip = null;
+try { geoip = require('geoip-lite'); }
+catch (e) { console.warn('⚠️ geoip-lite non installé (npm install geoip-lite) : pays des visiteurs non disponible.'); }
+
+let regionNames = null;
+try { regionNames = new Intl.DisplayNames(['fr'], { type: 'region' }); } catch (e) {}
+function countryName(code) {
+  if (!code) return 'Inconnu';
+  try { return regionNames ? regionNames.of(code) : code; } catch (e) { return code; }
+}
+function countryFlag(code) {
+  if (!code || code.length !== 2) return '🏳️';
+  try { return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0))); }
+  catch (e) { return '🏳️'; }
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -231,17 +250,31 @@ function trackVisit(req) {
   visits.days[day].visits++;
   visits.total++;
 
+  const ip = req.ip;
   let seen = dailyIpSeen.get(day);
   if (!seen) {
     seen = new Set();
     dailyIpSeen.set(day, seen);
     for (const k of dailyIpSeen.keys()) if (k !== day) dailyIpSeen.delete(k); // ne garde que le jour courant
   }
-  const ipHash = crypto.createHash('sha256').update(String(req.ip)).digest('hex').slice(0, 16);
+  const ipHash = crypto.createHash('sha256').update(String(ip)).digest('hex').slice(0, 16);
   if (!seen.has(ipHash)) {
     seen.add(ipHash);
     visits.days[day].uniqueIPs++;
   }
+
+  // 🆕 Journal détaillé (IP + pays) réservé à l'admin, borné aux 200 dernières visites
+  let country = null;
+  if (geoip) {
+    try {
+      const geo = geoip.lookup(ip);
+      if (geo && geo.country) country = geo.country;
+    } catch (e) {}
+  }
+  if (!visits.recent) visits.recent = [];
+  visits.recent.push({ ip, country, ts: Date.now() });
+  if (visits.recent.length > 200) visits.recent.splice(0, visits.recent.length - 200);
+
   visitsDirty = true;
 }
 
@@ -581,7 +614,16 @@ app.get('/api/admin/visits', adminAuth, limit('admin-api', 120, 60 * 1000), (req
     last14days.push({ date: d, visits: entry.visits, uniqueIPs: entry.uniqueIPs });
   }
 
-  res.json({ total: visits.total, today, last14days });
+  // 🆕 Les 50 visites les plus récentes, avec IP et pays
+  const recent = (visits.recent || []).slice(-50).reverse().map(v => ({
+    ip: v.ip,
+    country: v.country,
+    countryName: countryName(v.country),
+    flag: countryFlag(v.country),
+    date: v.ts
+  }));
+
+  res.json({ total: visits.total, today, last14days, recent, geoAvailable: !!geoip });
 });
 
 // Supprimer un utilisateur immédiatement (ménage forcé : n'avertit pas le worker, à utiliser après déconnexion idéalement)
