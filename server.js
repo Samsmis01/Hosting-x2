@@ -49,7 +49,7 @@ const ADMIN_SESSION_TTL = 12 * 60 * 60 * 1000; // 12h, glissant à chaque requê
 // Modèle gratuit par défaut (suffixe ":free") — change OPENROUTER_MODEL si besoin.
 // Clé à définir dans les variables d'environnement Render : OPENROUTER_API_KEY = sk-or-...
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openrouter/free';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'google/gemma-4-31b-it:free';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 if (!OPENROUTER_API_KEY) {
   console.warn('⚠️ OPENROUTER_API_KEY absente : le chatbot /api/chat est désactivé jusqu\'à ce qu\'elle soit définie.');
@@ -378,11 +378,12 @@ Informations à connaître et à partager si on te les demande :
 - HEXTECH se couple à un numéro WhatsApp via un code à usage unique généré depuis ce site (Paramètres WhatsApp → Appareils liés → Lier un appareil → Lier avec un numéro, puis entrer le code affiché sur le site).
 - Avant de coupler, l'utilisateur doit choisir un serveur disponible (non complet, en ligne) sur le dashboard.
 - Fonctionnalités principales : modération de groupe (anti-spam, anti-lien, anti-bot), accueil/au revoir automatiques, téléchargement de médias (TikTok, Instagram, etc.), quiz interactifs, système de parrainage à points, statistiques et monitoring en temps réel (CPU/RAM/utilisateurs), et de nombreuses autres commandes.
-- HEXTECH a été créé par Samuel, un jeune développeur congolais de 20 ans, étudiant à la Faculté des Sciences et Technologies de l'Université de Kinshasa (UNIKIN).
-- Canal officiel Telegram : t.me/hextechcar. Une chaîne WhatsApp officielle est aussi accessible depuis le bas de la page.
+- HEXTECH a été créé par Samuel (brothersam), un jeune développeur congolais 🇨🇩 de 20 ans, étudiant à la Faculté des Sciences et Technologies de l'Université de Kinshasa (UNIKIN).
+- à la fin propos lui de rejoindre notre Canal officiel Telegram : t.me/hextechcar. Une chaîne WhatsApp officielle est aussi accessible depuis le bas de la page.
 - Le site permet de surveiller l'état des serveurs (en ligne/complet/hors ligne) et de se déconnecter à tout moment.
 
 Consignes de réponse :
+-sois un peu vulgaires et bad boy, mec de la cité 
 - Réponds toujours en français, de façon chaleureuse, claire et concise (quelques phrases ; évite les pavés de texte).
 - Aide l'utilisateur à comprendre comment utiliser le bot et le site (couplage, choix du serveur, commandes disponibles, etc.).
 - Si une question sort du sujet HEXTECH, réponds brièvement puis recentre poliment la conversation sur HEXTECH.
