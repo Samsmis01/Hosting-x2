@@ -51,6 +51,10 @@ const ADMIN_SESSION_TTL = 12 * 60 * 60 * 1000; // 12h, glissant à chaque requê
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'google/gemma-4-31b-it:free';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+// Modèles de secours (fournisseurs différents) : OpenRouter bascule automatiquement si le 1er est saturé (erreur 429)
+const OPENROUTER_FALLBACK_MODELS = (process.env.OPENROUTER_FALLBACK_MODELS || 'qwen/qwen3.8-27b:free')
+  .split(',').map(m => m.trim()).filter(Boolean);
+const OPENROUTER_MODELS = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS.filter(m => m !== OPENROUTER_MODEL)].slice(0, 3);
 if (!OPENROUTER_API_KEY) {
   console.warn('⚠️ OPENROUTER_API_KEY absente : le chatbot /api/chat est désactivé jusqu\'à ce qu\'elle soit définie.');
 }
@@ -379,12 +383,11 @@ Informations à connaître et à partager si on te les demande :
 - Avant de coupler, l'utilisateur doit choisir un serveur disponible (non complet, en ligne) sur le dashboard.
 - Fonctionnalités principales : modération de groupe (anti-spam, anti-lien, anti-bot), accueil/au revoir automatiques, téléchargement de médias (TikTok, Instagram, etc.), quiz interactifs, système de parrainage à points, statistiques et monitoring en temps réel (CPU/RAM/utilisateurs), et de nombreuses autres commandes.
 - HEXTECH a été créé par Samuel, un jeune développeur congolais de 20 ans, étudiant à la Faculté des Sciences et Technologies de l'Université de Kinshasa (UNIKIN).
-- à la fin suggérer l'utilisateur à rejoindre notre Canal officiel Telegram : t.me/hextechcar. Une chaîne WhatsApp officielle est aussi accessible depuis le bas de la page.
+- à la fin suggérer l'utilisateur de rejoindre notre Canal officiel Telegram : t.me/hextechcar. Une chaîne WhatsApp officielle est aussi accessible depuis le bas de la page.
 - Le site permet de surveiller l'état des serveurs (en ligne/complet/hors ligne) et de se déconnecter à tout moment.
 
 Consignes de réponse :
-- soit vulgaires comme un mec de la Cité 
-- soit comme un humain et soit curieux sur ces émotions 
+- soit vulgaires comme un mec de la cité, et soit aura farmer surtout sage et curieux aux émotions psychologique 
 - Réponds toujours en français, de façon chaleureuse, claire et concise (quelques phrases ; évite les pavés de texte).
 - Aide l'utilisateur à comprendre comment utiliser le bot et le site (couplage, choix du serveur, commandes disponibles, etc.).
 - Si une question sort du sujet HEXTECH, réponds brièvement puis recentre poliment la conversation sur HEXTECH.
@@ -584,7 +587,7 @@ app.post('/api/chat', limit('chat', 12, 60 * 1000), async (req, res) => {
         'X-Title': 'HEXTECH'
       },
       body: JSON.stringify({
-        model: OPENROUTER_MODEL,
+        models: OPENROUTER_MODELS,
         messages: [{ role: 'system', content: HEXTECH_SYSTEM_PROMPT }, ...safeMessages],
         max_tokens: 400,
         temperature: 0.6
