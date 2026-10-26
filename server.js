@@ -60,7 +60,13 @@ const OPENROUTER_MODELS = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS.filte
 // Clé à définir dans les variables d'environnement Render : GEMINI_API_KEY
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+// 🆕 FIX : modèle(s) Gemini de secours, essayés dans l'ordre si le 1er expire ou échoue.
+// "gemini-flash-latest" pointe toujours vers le Flash actuel de Google.
+const GEMINI_FALLBACK_MODELS = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-flash-latest')
+  .split(',').map(m => m.trim()).filter(Boolean);
+const GEMINI_MODELS = [GEMINI_MODEL, ...GEMINI_FALLBACK_MODELS.filter(m => m !== GEMINI_MODEL)].slice(0, 2);
+const GEMINI_TIMEOUT = 20 * 1000; // par modèle (2 modèles max -> 40 s au pire)
+const geminiUrl = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 if (!GEMINI_API_KEY && !OPENROUTER_API_KEY) {
   console.warn('⚠️ GEMINI_API_KEY et OPENROUTER_API_KEY absentes : le chatbot /api/chat est désactivé jusqu\'à ce qu\'une clé soit définie.');
 }
@@ -584,56 +590,67 @@ app.post('/api/chat', limit('chat', 12, 60 * 1000), async (req, res) => {
 
     // 🆕 Gemini (Google AI Studio) en priorité
     if (GEMINI_API_KEY) {
-      try {
-        // Gemini exige que la conversation commence par un message "user"
-        const geminiContents = safeMessages
-          .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
-        while (geminiContents.length && geminiContents[0].role !== 'user') geminiContents.shift();
+      // Gemini exige que la conversation commence par un message "user"
+      const geminiContents = safeMessages
+        .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+      while (geminiContents.length && geminiContents[0].role !== 'user') geminiContents.shift();
 
-        // Timeout de 25 s : évite que le chat reste bloqué sur "HEXTECH écrit..."
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 25000);
-        let gRes;
+      let gReply = '';
+
+      // 🆕 FIX : on essaie chaque modèle Gemini à tour de rôle (GEMINI_MODELS), avec un timeout
+      // de 20 s chacun, pour éviter que le chat reste bloqué sur "HEXTECH écrit..." si un modèle est lent.
+      for (const model of GEMINI_MODELS) {
+        const started = Date.now();
         try {
-          gRes = await fetch(GEMINI_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
-            signal: ctrl.signal,
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: HEXTECH_SYSTEM_PROMPT }] },
-              contents: geminiContents,
-              generationConfig: {
-                maxOutputTokens: 1024,
-                temperature: 0.6,
-                // Réflexion minimale : réponses rapides pour un chatbot (par défaut "medium" = plus lent)
-                thinkingConfig: { thinkingLevel: 'low' }
-              }
-            })
-          });
-        } finally {
-          clearTimeout(timer);
-        }
-        const gData = await gRes.json();
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), GEMINI_TIMEOUT);
+          let gRes;
+          try {
+            gRes = await fetch(geminiUrl(model), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+              signal: ctrl.signal,
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: HEXTECH_SYSTEM_PROMPT }] },
+                contents: geminiContents,
+                // 🆕 FIX : thinkingConfig retiré (la phase de réflexion pouvait dépasser le timeout)
+                generationConfig: {
+                  maxOutputTokens: 1024,
+                  temperature: 0.6
+                }
+              })
+            });
+          } finally {
+            clearTimeout(timer);
+          }
+          const gData = await gRes.json();
 
-        if (!gRes.ok) {
-          throw new Error(`HTTP ${gRes.status} ${JSON.stringify(gData?.error || gData)}`);
-        }
+          if (!gRes.ok) {
+            throw new Error(`HTTP ${gRes.status} ${JSON.stringify(gData?.error || gData)}`);
+          }
 
-        const gReply = (gData?.candidates?.[0]?.content?.parts || [])
-          .filter(part => !part.thought)
-          .map(part => part.text || '').join('').trim();
-        if (!gReply) {
-          throw new Error('Réponse vide : ' + JSON.stringify(gData?.promptFeedback || gData?.candidates?.[0]?.finishReason || gData));
+          const text = (gData?.candidates?.[0]?.content?.parts || [])
+            .filter(part => !part.thought)
+            .map(part => part.text || '').join('').trim();
+          if (!text) {
+            throw new Error('Réponse vide : ' + JSON.stringify(gData?.promptFeedback || gData?.candidates?.[0]?.finishReason || gData));
+          }
+          gReply = text;
+          console.log(`✅ Gemini (${model}) a répondu en ${Date.now() - started} ms`);
+          break;
+        } catch (ge) {
+          const reason = ge.name === 'AbortError' ? `timeout après ${GEMINI_TIMEOUT / 1000} s` : ge.message;
+          console.error(`❌ Erreur Gemini (${model}):`, reason);
         }
-        return res.json({ reply: gReply });
-      } catch (ge) {
-        console.error('❌ Erreur Gemini:', ge.message);
-        // Pas de clé OpenRouter de secours : on s'arrête ici
-        if (!OPENROUTER_API_KEY) {
-          return res.status(502).json({ error: "Le service IA n'a pas répondu correctement." });
-        }
-        console.log('↪️ Bascule sur OpenRouter (secours)');
       }
+
+      if (gReply) return res.json({ reply: gReply });
+
+      // Pas de clé OpenRouter de secours : on s'arrête ici
+      if (!OPENROUTER_API_KEY) {
+        return res.status(502).json({ error: "Le service IA n'a pas répondu correctement." });
+      }
+      console.log('↪️ Bascule sur OpenRouter (secours)');
     }
 
     if (!OPENROUTER_API_KEY) {
@@ -960,7 +977,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Serveur de couplage sur le port ${PORT}`);
   console.log(`🖥️ Serveurs : ${SERVER_IDS.length} (max ${MAX_USERS_PER_SERVER} utilisateurs chacun)`);
   console.log(`🔒 Données chiffrées : ${ENCRYPTION_KEY ? 'oui' : 'non (ENCRYPTION_KEY absente)'}`);
-  console.log(`🤖 Chatbot IA : ${GEMINI_API_KEY ? 'activé (Gemini : ' + GEMINI_MODEL + ')' : OPENROUTER_API_KEY ? 'activé (OpenRouter)' : 'désactivé (GEMINI_API_KEY absente)'}`);
+  console.log(`🤖 Chatbot IA : ${GEMINI_API_KEY ? 'activé (Gemini : ' + GEMINI_MODELS.join(' → ') + ')' : OPENROUTER_API_KEY ? 'activé (OpenRouter)' : 'désactivé (GEMINI_API_KEY absente)'}`);
   console.log('════════════════════════════════════════');
 });
 
