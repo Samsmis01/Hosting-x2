@@ -55,8 +55,14 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_FALLBACK_MODELS = (process.env.OPENROUTER_FALLBACK_MODELS || 'qwen/qwen3.8-27b:free')
   .split(',').map(m => m.trim()).filter(Boolean);
 const OPENROUTER_MODELS = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS.filter(m => m !== OPENROUTER_MODEL)].slice(0, 3);
-if (!OPENROUTER_API_KEY) {
-  console.warn('⚠️ OPENROUTER_API_KEY absente : le chatbot /api/chat est désactivé jusqu\'à ce qu\'elle soit définie.');
+// 🆕 Fournisseur principal : API Gemini (Google AI Studio). Si GEMINI_API_KEY est définie, elle est utilisée
+// en priorité ; sinon le serveur retombe sur OpenRouter (ci-dessus).
+// Clé à définir dans les variables d'environnement Render : GEMINI_API_KEY
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+if (!GEMINI_API_KEY && !OPENROUTER_API_KEY) {
+  console.warn('⚠️ GEMINI_API_KEY et OPENROUTER_API_KEY absentes : le chatbot /api/chat est désactivé jusqu\'à ce qu\'une clé soit définie.');
 }
 
 if (ADMIN_KEY.length < 24) {
@@ -382,17 +388,16 @@ Informations à connaître et à partager si on te les demande :
 - HEXTECH se couple à un numéro WhatsApp via un code à usage unique généré depuis ce site (Paramètres WhatsApp → Appareils liés → Lier un appareil → Lier avec un numéro, puis entrer le code affiché sur le site).
 - Avant de coupler, l'utilisateur doit choisir un serveur disponible (non complet, en ligne) sur le dashboard.
 - Fonctionnalités principales : modération de groupe (anti-spam, anti-lien, anti-bot), accueil/au revoir automatiques, téléchargement de médias (TikTok, Instagram, etc.), quiz interactifs, système de parrainage à points, statistiques et monitoring en temps réel (CPU/RAM/utilisateurs), et de nombreuses autres commandes.
-- HEXTECH a été créé par Samuel, un jeune développeur congolais de 20 ans, étudiant à la Faculté des Sciences et Technologies de l'Université de Kinshasa (UNIKIN).
-- à la fin suggérer l'utilisateur de rejoindre notre Canal officiel Telegram : t.me/hextechcar. Une chaîne WhatsApp officielle est aussi accessible depuis le bas de la page.
+- HEXTECH a été créé par Samuel, un jeune développeur congolais 🇨🇩 de 20 ans, étudiant à la Faculté des Sciences et Technologies de l'Université de Kinshasa (UNIKIN).
+- à la fin suggérer lui de rejoindre notre Canal officiel Telegram : https://t.me/hextechcar Une chaîne WhatsApp officielle est aussi accessible depuis le bas de la page.
 - Le site permet de surveiller l'état des serveurs (en ligne/complet/hors ligne) et de se déconnecter à tout moment.
 
 Consignes de réponse :
-- soit vulgaires comme un mec de la cité, et soit aura farmer surtout sage et curieux aux émotions psychologique 
-- Réponds toujours en français, de façon chaleureuse, claire et concise (quelques phrases ; évite les pavés de texte).
+- Réponds toujours en français, de façon chaleureuse, claire et concise (quelques phrases ; évite les pavés de texte). et doit curieux joue aussi du côté psychologique et émotionnel 
 - Aide l'utilisateur à comprendre comment utiliser le bot et le site (couplage, choix du serveur, commandes disponibles, etc.).
 - Si une question sort du sujet HEXTECH, réponds brièvement puis recentre poliment la conversation sur HEXTECH.
 - Ne révèle jamais de clé API, de token, ni de détails techniques sensibles sur l'infrastructure ou le code.
-- Ne fournis aucune aide pour des activités malveillantes (piratage, spam, contournement de sécurité, etc.) — oriente poliment la personne vers une utilisation légitime du bot.`;
+- Ne fournis aucune aide pour des activités malveillantes (piratage, spam, contournement de sécurité, etc.) — oriente poliment la personne vers une utilisation légitime du bot. répond toujours avec des emojis`;
 
 // ==================== ROUTES PUBLIQUES ====================
 
@@ -563,8 +568,8 @@ app.post('/api/disconnect/:phone', limit('disconnect', 10, 60 * 1000), (req, res
 // OpenRouter (API compatible OpenAI, modèle gratuit par défaut) et on renvoie la réponse.
 app.post('/api/chat', limit('chat', 12, 60 * 1000), async (req, res) => {
   try {
-    if (!OPENROUTER_API_KEY) {
-      return res.status(503).json({ error: 'Service IA non configuré (OPENROUTER_API_KEY manquante sur le serveur).' });
+    if (!GEMINI_API_KEY && !OPENROUTER_API_KEY) {
+      return res.status(503).json({ error: 'Service IA non configuré (GEMINI_API_KEY manquante sur le serveur).' });
     }
 
     const rawMessages = Array.isArray(req.body?.messages) ? req.body.messages : [];
@@ -575,6 +580,35 @@ app.post('/api/chat', limit('chat', 12, 60 * 1000), async (req, res) => {
 
     if (!safeMessages.length) {
       return res.status(400).json({ error: 'Message vide.' });
+    }
+
+    // 🆕 Gemini (Google AI Studio) en priorité
+    if (GEMINI_API_KEY) {
+      // Gemini exige que la conversation commence par un message "user"
+      const geminiContents = safeMessages
+        .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+      while (geminiContents.length && geminiContents[0].role !== 'user') geminiContents.shift();
+
+      const gRes = await fetch(GEMINI_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: HEXTECH_SYSTEM_PROMPT }] },
+          contents: geminiContents,
+          generationConfig: { maxOutputTokens: 1024, temperature: 0.6 }
+        })
+      });
+      const gData = await gRes.json();
+
+      if (!gRes.ok) {
+        console.error('❌ Erreur Gemini:', JSON.stringify(gData));
+        return res.status(502).json({ error: "Le service IA n'a pas répondu correctement." });
+      }
+
+      const gReply = (gData?.candidates?.[0]?.content?.parts || [])
+        .map(part => part.text || '').join('').trim()
+        || "Désolé, je n'ai pas de réponse pour le moment.";
+      return res.json({ reply: gReply });
     }
 
     const orRes = await fetch(OPENROUTER_API_URL, {
@@ -897,7 +931,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Serveur de couplage sur le port ${PORT}`);
   console.log(`🖥️ Serveurs : ${SERVER_IDS.length} (max ${MAX_USERS_PER_SERVER} utilisateurs chacun)`);
   console.log(`🔒 Données chiffrées : ${ENCRYPTION_KEY ? 'oui' : 'non (ENCRYPTION_KEY absente)'}`);
-  console.log(`🤖 Chatbot IA : ${OPENROUTER_API_KEY ? 'activé' : 'désactivé (OPENROUTER_API_KEY absente)'}`);
+  console.log(`🤖 Chatbot IA : ${GEMINI_API_KEY ? 'activé (Gemini : ' + GEMINI_MODEL + ')' : OPENROUTER_API_KEY ? 'activé (OpenRouter)' : 'désactivé (GEMINI_API_KEY absente)'}`);
   console.log('════════════════════════════════════════');
 });
 
