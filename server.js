@@ -45,30 +45,21 @@ const ADMIN_PANEL_PASSWORD = process.env.ADMIN_PANEL_PASSWORD || '';
 const ADMIN_SESSION_TTL = 12 * 60 * 60 * 1000; // 12h, glissant à chaque requête authentifiée
 
 // 🆕 ==================== ASSISTANT IA (CHATBOT HEXTECH) ====================
-// Même fournisseur que l'ancien projet Poseidon : OpenRouter (API compatible OpenAI).
-// Modèle gratuit par défaut (suffixe ":free") — change OPENROUTER_MODEL si besoin.
+// Fournisseur principal : OpenRouter, avec EXACTEMENT le même appel que le script Python
+// qui fonctionne (modèle unique "openai/gpt-4o-mini", pas de liste de modèles gratuits).
 // Clé à définir dans les variables d'environnement Render : OPENROUTER_API_KEY = sk-or-...
+// Change OPENROUTER_MODEL si tu veux un autre modèle.
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'google/gemma-4-31b-it:free';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-// Modèles de secours (fournisseurs différents) : OpenRouter bascule automatiquement si le 1er est saturé (erreur 429)
-const OPENROUTER_FALLBACK_MODELS = (process.env.OPENROUTER_FALLBACK_MODELS || 'qwen/qwen3.8-27b:free')
-  .split(',').map(m => m.trim()).filter(Boolean);
-const OPENROUTER_MODELS = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS.filter(m => m !== OPENROUTER_MODEL)].slice(0, 3);
-// 🆕 Fournisseur principal : API Gemini (Google AI Studio). Si GEMINI_API_KEY est définie, elle est utilisée
-// en priorité ; sinon le serveur retombe sur OpenRouter (ci-dessus).
-// Clé à définir dans les variables d'environnement Render : GEMINI_API_KEY
+// Secours (optionnel) : API Gemini (Google AI Studio), utilisée seulement si OpenRouter
+// échoue ou si OPENROUTER_API_KEY est absente. Clé : GEMINI_API_KEY
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-// 🆕 FIX : modèle(s) Gemini de secours, essayés dans l'ordre si le 1er expire ou échoue.
-// "gemini-flash-latest" pointe toujours vers le Flash actuel de Google.
-const GEMINI_FALLBACK_MODELS = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-flash-latest')
-  .split(',').map(m => m.trim()).filter(Boolean);
-const GEMINI_MODELS = [GEMINI_MODEL, ...GEMINI_FALLBACK_MODELS.filter(m => m !== GEMINI_MODEL)].slice(0, 2);
-const GEMINI_TIMEOUT = 20 * 1000; // par modèle (2 modèles max -> 40 s au pire)
-const geminiUrl = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const AI_TIMEOUT = 25000; // 25 s : évite que le chat reste bloqué sur "HEXTECH écrit..."
 if (!GEMINI_API_KEY && !OPENROUTER_API_KEY) {
-  console.warn('⚠️ GEMINI_API_KEY et OPENROUTER_API_KEY absentes : le chatbot /api/chat est désactivé jusqu\'à ce qu\'une clé soit définie.');
+  console.warn('⚠️ OPENROUTER_API_KEY et GEMINI_API_KEY absentes : le chatbot /api/chat est désactivé jusqu\'à ce qu\'une clé soit définie.');
 }
 
 if (ADMIN_KEY.length < 24) {
@@ -405,6 +396,85 @@ Consignes de réponse :
 - Ne révèle jamais de clé API, de token, ni de détails techniques sensibles sur l'infrastructure ou le code.
 - Ne fournis aucune aide pour des activités malveillantes (piratage, spam, contournement de sécurité, etc.) — oriente poliment la personne vers une utilisation légitime du bot.`;
 
+// 🆕 ==================== ASSISTANT IA : APPELS AUX FOURNISSEURS ====================
+// fetch avec timeout (évite que le chat reste bloqué sur "HEXTECH écrit...")
+async function fetchWithTimeout(url, options, ms) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// OpenRouter : même requête que le script Python qui fonctionne
+// (modèle unique, system prompt + historique, temperature 0.6, max_tokens 512)
+async function askOpenRouter(safeMessages) {
+  const res = await fetchWithTimeout(OPENROUTER_API_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://openrouter.ai/',
+      'X-Title': 'HEXTECH'
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: [{ role: 'system', content: HEXTECH_SYSTEM_PROMPT }, ...safeMessages],
+      temperature: 0.6,
+      max_tokens: 512
+    })
+  }, AI_TIMEOUT);
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} ${JSON.stringify(data?.error || data)}`);
+  }
+
+  const reply = data?.choices?.[0]?.message?.content;
+  if (typeof reply !== 'string' || !reply.trim()) {
+    throw new Error('Réponse vide : ' + JSON.stringify(data).slice(0, 300));
+  }
+  return reply.trim();
+}
+
+// Gemini (Google AI Studio) : secours
+async function askGemini(safeMessages) {
+  // Gemini exige que la conversation commence par un message "user"
+  const geminiContents = safeMessages
+    .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+  while (geminiContents.length && geminiContents[0].role !== 'user') geminiContents.shift();
+
+  const res = await fetchWithTimeout(GEMINI_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: HEXTECH_SYSTEM_PROMPT }] },
+      contents: geminiContents,
+      generationConfig: {
+        maxOutputTokens: 1024,
+        temperature: 0.6,
+        // Réflexion minimale : réponses rapides pour un chatbot
+        thinkingConfig: { thinkingLevel: 'low' }
+      }
+    })
+  }, AI_TIMEOUT);
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} ${JSON.stringify(data?.error || data)}`);
+  }
+
+  const reply = (data?.candidates?.[0]?.content?.parts || [])
+    .filter(part => !part.thought)
+    .map(part => part.text || '').join('').trim();
+  if (!reply) {
+    throw new Error('Réponse vide : ' + JSON.stringify(data?.promptFeedback || data?.candidates?.[0]?.finishReason || data));
+  }
+  return reply;
+}
+
 // ==================== ROUTES PUBLIQUES ====================
 
 // Site web : on sert UNIQUEMENT index.html (plus tout le dossier du projet)
@@ -571,11 +641,12 @@ app.post('/api/disconnect/:phone', limit('disconnect', 10, 60 * 1000), (req, res
 
 // 🆕 ==================== ASSISTANT IA : ROUTE /api/chat ====================
 // Le robot du dashboard envoie ici l'historique de la conversation ; on relaie vers
-// OpenRouter (API compatible OpenAI, modèle gratuit par défaut) et on renvoie la réponse.
+// OpenRouter (même système que le script Python : openai/gpt-4o-mini) et on renvoie la réponse.
+// Gemini sert de secours si une GEMINI_API_KEY est définie.
 app.post('/api/chat', limit('chat', 12, 60 * 1000), async (req, res) => {
   try {
-    if (!GEMINI_API_KEY && !OPENROUTER_API_KEY) {
-      return res.status(503).json({ error: 'Service IA non configuré (GEMINI_API_KEY manquante sur le serveur).' });
+    if (!OPENROUTER_API_KEY && !GEMINI_API_KEY) {
+      return res.status(503).json({ error: 'Service IA non configuré (OPENROUTER_API_KEY manquante sur le serveur).' });
     }
 
     const rawMessages = Array.isArray(req.body?.messages) ? req.body.messages : [];
@@ -588,103 +659,28 @@ app.post('/api/chat', limit('chat', 12, 60 * 1000), async (req, res) => {
       return res.status(400).json({ error: 'Message vide.' });
     }
 
-    // 🆕 Gemini (Google AI Studio) en priorité
-    if (GEMINI_API_KEY) {
-      // Gemini exige que la conversation commence par un message "user"
-      const geminiContents = safeMessages
-        .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
-      while (geminiContents.length && geminiContents[0].role !== 'user') geminiContents.shift();
-
-      let gReply = '';
-
-      // 🆕 FIX : on essaie chaque modèle Gemini à tour de rôle (GEMINI_MODELS), avec un timeout
-      // de 20 s chacun, pour éviter que le chat reste bloqué sur "HEXTECH écrit..." si un modèle est lent.
-      for (const model of GEMINI_MODELS) {
-        const started = Date.now();
-        try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), GEMINI_TIMEOUT);
-          let gRes;
-          try {
-            gRes = await fetch(geminiUrl(model), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
-              signal: ctrl.signal,
-              body: JSON.stringify({
-                systemInstruction: { parts: [{ text: HEXTECH_SYSTEM_PROMPT }] },
-                contents: geminiContents,
-                // 🆕 FIX : thinkingConfig retiré (la phase de réflexion pouvait dépasser le timeout)
-                generationConfig: {
-                  maxOutputTokens: 1024,
-                  temperature: 0.6
-                }
-              })
-            });
-          } finally {
-            clearTimeout(timer);
-          }
-          const gData = await gRes.json();
-
-          if (!gRes.ok) {
-            throw new Error(`HTTP ${gRes.status} ${JSON.stringify(gData?.error || gData)}`);
-          }
-
-          const text = (gData?.candidates?.[0]?.content?.parts || [])
-            .filter(part => !part.thought)
-            .map(part => part.text || '').join('').trim();
-          if (!text) {
-            throw new Error('Réponse vide : ' + JSON.stringify(gData?.promptFeedback || gData?.candidates?.[0]?.finishReason || gData));
-          }
-          gReply = text;
-          console.log(`✅ Gemini (${model}) a répondu en ${Date.now() - started} ms`);
-          break;
-        } catch (ge) {
-          const reason = ge.name === 'AbortError' ? `timeout après ${GEMINI_TIMEOUT / 1000} s` : ge.message;
-          console.error(`❌ Erreur Gemini (${model}):`, reason);
+    // 1) OpenRouter en priorité
+    if (OPENROUTER_API_KEY) {
+      try {
+        const reply = await askOpenRouter(safeMessages);
+        return res.json({ reply });
+      } catch (oe) {
+        console.error('❌ Erreur OpenRouter:', oe.message);
+        if (!GEMINI_API_KEY) {
+          return res.status(502).json({ error: "Le service IA n'a pas répondu correctement." });
         }
+        console.log('↪️ Bascule sur Gemini (secours)');
       }
-
-      if (gReply) return res.json({ reply: gReply });
-
-      // Pas de clé OpenRouter de secours : on s'arrête ici
-      if (!OPENROUTER_API_KEY) {
-        return res.status(502).json({ error: "Le service IA n'a pas répondu correctement." });
-      }
-      console.log('↪️ Bascule sur OpenRouter (secours)');
     }
 
-    if (!OPENROUTER_API_KEY) {
+    // 2) Gemini (secours, ou seul fournisseur si pas de clé OpenRouter)
+    try {
+      const reply = await askGemini(safeMessages);
+      return res.json({ reply });
+    } catch (ge) {
+      console.error('❌ Erreur Gemini:', ge.message);
       return res.status(502).json({ error: "Le service IA n'a pas répondu correctement." });
     }
-
-    const orRes = await fetch(OPENROUTER_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        // Recommandés par OpenRouter (identifient l'appelant, pas obligatoires pour que ça marche)
-        'HTTP-Referer': 'https://last-judment.onrender.com',
-        'X-Title': 'HEXTECH'
-      },
-      body: JSON.stringify({
-        models: OPENROUTER_MODELS,
-        messages: [{ role: 'system', content: HEXTECH_SYSTEM_PROMPT }, ...safeMessages],
-        max_tokens: 400,
-        temperature: 0.6
-      })
-    });
-
-    const data = await orRes.json();
-
-    if (!orRes.ok) {
-      console.error('❌ Erreur OpenRouter:', data);
-      return res.status(502).json({ error: "Le service IA n'a pas répondu correctement." });
-    }
-
-    const reply = data?.choices?.[0]?.message?.content?.trim()
-      || "Désolé, je n'ai pas de réponse pour le moment.";
-
-    res.json({ reply });
   } catch (e) {
     console.error('❌ Erreur /api/chat:', e.message);
     res.status(500).json({ error: 'Erreur serveur.' });
@@ -977,7 +973,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Serveur de couplage sur le port ${PORT}`);
   console.log(`🖥️ Serveurs : ${SERVER_IDS.length} (max ${MAX_USERS_PER_SERVER} utilisateurs chacun)`);
   console.log(`🔒 Données chiffrées : ${ENCRYPTION_KEY ? 'oui' : 'non (ENCRYPTION_KEY absente)'}`);
-  console.log(`🤖 Chatbot IA : ${GEMINI_API_KEY ? 'activé (Gemini : ' + GEMINI_MODELS.join(' → ') + ')' : OPENROUTER_API_KEY ? 'activé (OpenRouter)' : 'désactivé (GEMINI_API_KEY absente)'}`);
+  console.log(`🤖 Chatbot IA : ${OPENROUTER_API_KEY ? 'activé (OpenRouter : ' + OPENROUTER_MODEL + ')' : GEMINI_API_KEY ? 'activé (Gemini : ' + GEMINI_MODEL + ')' : 'désactivé (OPENROUTER_API_KEY absente)'}`);
   console.log('════════════════════════════════════════');
 });
 
