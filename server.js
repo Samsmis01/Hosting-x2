@@ -388,16 +388,16 @@ Informations à connaître et à partager si on te les demande :
 - HEXTECH se couple à un numéro WhatsApp via un code à usage unique généré depuis ce site (Paramètres WhatsApp → Appareils liés → Lier un appareil → Lier avec un numéro, puis entrer le code affiché sur le site).
 - Avant de coupler, l'utilisateur doit choisir un serveur disponible (non complet, en ligne) sur le dashboard.
 - Fonctionnalités principales : modération de groupe (anti-spam, anti-lien, anti-bot), accueil/au revoir automatiques, téléchargement de médias (TikTok, Instagram, etc.), quiz interactifs, système de parrainage à points, statistiques et monitoring en temps réel (CPU/RAM/utilisateurs), et de nombreuses autres commandes.
-- HEXTECH a été créé par Samuel, un jeune développeur congolais 🇨🇩 de 20 ans, étudiant à la Faculté des Sciences et Technologies de l'Université de Kinshasa (UNIKIN).
-- à la fin suggérer lui de rejoindre notre Canal officiel Telegram : https://t.me/hextechcar Une chaîne WhatsApp officielle est aussi accessible depuis le bas de la page.
+- HEXTECH a été créé par Samuel, un jeune développeur congolais de 20 ans, étudiant à la Faculté des Sciences et Technologies de l'Université de Kinshasa (UNIKIN).
+- Canal officiel Telegram : t.me/hextechcar. Une chaîne WhatsApp officielle est aussi accessible depuis le bas de la page.
 - Le site permet de surveiller l'état des serveurs (en ligne/complet/hors ligne) et de se déconnecter à tout moment.
 
 Consignes de réponse :
-- Réponds toujours en français, de façon chaleureuse, claire et concise (quelques phrases ; évite les pavés de texte). et doit curieux joue aussi du côté psychologique et émotionnel 
+- Réponds toujours en français, de façon chaleureuse, claire et concise (quelques phrases ; évite les pavés de texte).
 - Aide l'utilisateur à comprendre comment utiliser le bot et le site (couplage, choix du serveur, commandes disponibles, etc.).
 - Si une question sort du sujet HEXTECH, réponds brièvement puis recentre poliment la conversation sur HEXTECH.
 - Ne révèle jamais de clé API, de token, ni de détails techniques sensibles sur l'infrastructure ou le code.
-- Ne fournis aucune aide pour des activités malveillantes (piratage, spam, contournement de sécurité, etc.) — oriente poliment la personne vers une utilisation légitime du bot. répond toujours avec des emojis`;
+- Ne fournis aucune aide pour des activités malveillantes (piratage, spam, contournement de sécurité, etc.) — oriente poliment la personne vers une utilisation légitime du bot.`;
 
 // ==================== ROUTES PUBLIQUES ====================
 
@@ -584,31 +584,60 @@ app.post('/api/chat', limit('chat', 12, 60 * 1000), async (req, res) => {
 
     // 🆕 Gemini (Google AI Studio) en priorité
     if (GEMINI_API_KEY) {
-      // Gemini exige que la conversation commence par un message "user"
-      const geminiContents = safeMessages
-        .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
-      while (geminiContents.length && geminiContents[0].role !== 'user') geminiContents.shift();
+      try {
+        // Gemini exige que la conversation commence par un message "user"
+        const geminiContents = safeMessages
+          .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+        while (geminiContents.length && geminiContents[0].role !== 'user') geminiContents.shift();
 
-      const gRes = await fetch(GEMINI_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: HEXTECH_SYSTEM_PROMPT }] },
-          contents: geminiContents,
-          generationConfig: { maxOutputTokens: 1024, temperature: 0.6 }
-        })
-      });
-      const gData = await gRes.json();
+        // Timeout de 25 s : évite que le chat reste bloqué sur "HEXTECH écrit..."
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 25000);
+        let gRes;
+        try {
+          gRes = await fetch(GEMINI_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+            signal: ctrl.signal,
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: HEXTECH_SYSTEM_PROMPT }] },
+              contents: geminiContents,
+              generationConfig: {
+                maxOutputTokens: 1024,
+                temperature: 0.6,
+                // Réflexion minimale : réponses rapides pour un chatbot (par défaut "medium" = plus lent)
+                thinkingConfig: { thinkingLevel: 'low' }
+              }
+            })
+          });
+        } finally {
+          clearTimeout(timer);
+        }
+        const gData = await gRes.json();
 
-      if (!gRes.ok) {
-        console.error('❌ Erreur Gemini:', JSON.stringify(gData));
-        return res.status(502).json({ error: "Le service IA n'a pas répondu correctement." });
+        if (!gRes.ok) {
+          throw new Error(`HTTP ${gRes.status} ${JSON.stringify(gData?.error || gData)}`);
+        }
+
+        const gReply = (gData?.candidates?.[0]?.content?.parts || [])
+          .filter(part => !part.thought)
+          .map(part => part.text || '').join('').trim();
+        if (!gReply) {
+          throw new Error('Réponse vide : ' + JSON.stringify(gData?.promptFeedback || gData?.candidates?.[0]?.finishReason || gData));
+        }
+        return res.json({ reply: gReply });
+      } catch (ge) {
+        console.error('❌ Erreur Gemini:', ge.message);
+        // Pas de clé OpenRouter de secours : on s'arrête ici
+        if (!OPENROUTER_API_KEY) {
+          return res.status(502).json({ error: "Le service IA n'a pas répondu correctement." });
+        }
+        console.log('↪️ Bascule sur OpenRouter (secours)');
       }
+    }
 
-      const gReply = (gData?.candidates?.[0]?.content?.parts || [])
-        .map(part => part.text || '').join('').trim()
-        || "Désolé, je n'ai pas de réponse pour le moment.";
-      return res.json({ reply: gReply });
+    if (!OPENROUTER_API_KEY) {
+      return res.status(502).json({ error: "Le service IA n'a pas répondu correctement." });
     }
 
     const orRes = await fetch(OPENROUTER_API_URL, {
